@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+.vite/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Environment / secrets (keep the documented templates)
+.env
+.env.*
+!.env.example
+
+# Persistent model cache (Fly volume)
+/data/
+backend/data/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.lnk
+
+# Logs
+*.log
+npm-debug.log*

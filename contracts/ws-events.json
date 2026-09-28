@@ -1,0 +1,98 @@
+{
+  "$comment": "Golden wire-contract manifest for GourMate (ChefSight). Source of truth: docs/decisions/gourmate.architecture.md sections 6-11 and specs/gourmate.spec.md sections 6-7. Both backend/tests/test_protocol.py and frontend/src/__tests__/types.contract.test.ts load this file and fail on drift.",
+  "version": "1.0.0",
+  "source": "docs/decisions/gourmate.architecture.md",
+  "transport": {
+    "ws_endpoint": "/ws/session",
+    "binary_frame": "Int16 PCM, 16 kHz mono, 20-40 ms frames"
+  },
+  "client_to_server": [
+    "start",
+    "sync",
+    "control",
+    "text_input",
+    "tool_result",
+    "recipe_state"
+  ],
+  "server_to_client": [
+    "ready",
+    "vad",
+    "transcript",
+    "choices",
+    "assistant_text",
+    "assistant_audio",
+    "tool_call",
+    "state",
+    "recipe",
+    "reset",
+    "plan",
+    "done",
+    "error",
+    "rate_limited",
+    "turn_end"
+  ],
+  "session_phases": [
+    "intake",
+    "planning",
+    "cooking",
+    "done"
+  ],
+  "tool_names": [
+    "advance_step",
+    "repeat_step",
+    "go_to_step",
+    "create_kitchen_timer",
+    "cancel_timer",
+    "substitute_ingredient",
+    "begin_dish",
+    "create_plan",
+    "offer_choices"
+  ],
+  "error_codes": [
+    "out_of_scope",
+    "recipe_invalid",
+    "audio_too_long",
+    "no_speech",
+    "audio_corrupt",
+    "mic_denied",
+    "llm_timeout",
+    "llm_rate",
+    "llm_blocked",
+    "llm_config",
+    "tts_failed",
+    "rate_limited",
+    "engine_loading",
+    "ws_dropped"
+  ],
+  "voice_states": [
+    "idle",
+    "listening",
+    "submitting",
+    "processing",
+    "answering",
+    "triage"
+  ],
+  "vad_states": [
+    "speech_start",
+    "speech_end"
+  ],
+  "control_actions": [
+    "mute",
+    "unmute",
+    "barge_in",
+    "set_voice"
+  ],
+  "close_codes": {
+    "normal": 1000,
+    "internal": 1011,
+    "too_many_connections": 1013
+  },
+  "rest_statuses": {
+    "recipe_invalid": 400,
+    "rate_limited": 429,
+    "llm_timeout": 502,
+    "llm_rate": 502,
+    "llm_config": 502,
+    "engine_loading": 503
+  }
+}

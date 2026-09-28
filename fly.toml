@@ -1,0 +1,64 @@
+# fly.toml — GourMate (ChefSight) API
+#
+# Reference: docs/decisions/gourmate.architecture.md §13 (Deployment Topology)
+#
+# SECRETS (never place in this file):
+#   fly secrets set GEMINI_API_KEY
+# Any other sensitive override (e.g. a rotated key) can also be set as a
+# secret; secrets take precedence over [env].
+#
+# Deploy:  fly deploy
+#   The volume declared under [mounts] is created automatically on first deploy.
+
+app = "gourmate-api"
+
+# Region: Southeast Asia. The product's reference dish ("chicken adobo") and
+# primary audience are SE-Asian home cooks; `sin` is the closest Fly region and
+# keeps the voice round-trip low. Revisit if the audience changes.
+primary_region = "sin"
+
+[build]
+  # The Docker build context is the repository root; the Dockerfile uses
+  # `backend/...` paths accordingly.
+  dockerfile = "backend/Dockerfile"
+  # Make backend/.dockerignore effective for the root build context.
+  ignorefile = "backend/.dockerignore"
+
+[env]
+  # Persistent volume caches the whisper + silero weights (architecture §13).
+  HF_HOME = "/data/hf"
+  WHISPER_MODEL = "small.en"
+  # Live partial captions are disabled (unreliable streaming partials); only the
+  # accurate final Whisper pass runs, so no partial model is loaded.
+  STREAMING_STT_ENABLED = "false"
+  WHISPER_PARTIAL_ENABLED = "false"
+  # Full assistant: Gemini intake/conversation + tools + edge-tts.
+  TRANSCRIPTION_ONLY = "false"
+  GEMINI_MODEL = "gemini-3.5-flash-lite"
+  # NOTE: GEMINI_API_KEY is intentionally absent — set it via `fly secrets`.
+
+[mounts]
+  source = "gourmate_models"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine warm so the first voice turn isn't a cold start (§13).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/api/health"
+
+# 2 vCPU shared / 2 GB RAM (architecture §13: shared-cpu-2x, 2 GB min).
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+  cpus = 2
+  cpu_kind = "shared"

@@ -1,0 +1,42 @@
+# Build-context exclusions for the GourMate backend image.
+#
+# Applied by fly.toml via `[build] ignorefile = "backend/.dockerignore"` while
+# the Docker context is the repository root, so patterns are written to match
+# at any depth (`**/`). They also remain valid for a context-rooted build.
+
+# Python bytecode / caches
+**/__pycache__/
+**/*.pyc
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/*.egg-info/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Virtual environments
+.venv/
+**/.venv/
+venv/
+**/venv/
+
+# Secrets / local env — never ship, but keep the documented template
+**/.env
+**/.env.*
+!**/.env.example
+
+# Tests & dev tooling
+**/tests/
+**/test/
+**/conftest.py
+**/pytest.ini
+**/tox.ini
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+
+# Tooling / VCS / docs
+**/.git/
+**/.github/
+**/*.md
+**/.DS_Store

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Python 3.11)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          # setup-python warns (does not fail) if a listed file is absent.
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        shell: bash
+        # Runtime deps are always required (the app imports them during test
+        # collection). QA-owned dev deps are layered on top when present, so an
+        # absent requirements-dev.txt is not an error.
+        run: |
+          python -m pip install --upgrade pip
+          echo "==> Installing requirements.txt"
+          pip install -r requirements.txt
+          if [ -f requirements-dev.txt ]; then
+            echo "==> Installing requirements-dev.txt"
+            pip install -r requirements-dev.txt
+          else
+            echo "==> requirements-dev.txt not found; skipping dev deps"
+          fi
+
+      - name: Byte-compile application
+        run: python -m compileall app
+
+      - name: Run tests (only when pytest is available)
+        shell: bash
+        run: |
+          if python -c "import pytest" 2>/dev/null; then
+            python -m pytest -q
+          else
+            echo "==> pytest not installed (no dev requirements yet); skipping tests."
+          fi
+
+  frontend:
+    name: Frontend (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect lockfile
+        id: lock
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+            echo "path=frontend/package-lock.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: ${{ steps.lock.outputs.cache }}
+          cache-dependency-path: ${{ steps.lock.outputs.path }}
+
+      - name: Install dependencies
+        shell: bash
+        # `npm ci` requires a lockfile; degrade to `npm install` until one exists.
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "==> No package-lock.json; falling back to npm install"
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests (only when a test script exists)
+        shell: bash
+        env:
+          CI: "true"
+        run: |
+          if node -e "const s=require('./package.json').scripts||{}; process.exit(s.test?0:1)"; then
+            npm test
+          else
+            echo "==> No npm test script defined; skipping tests."
+          fi

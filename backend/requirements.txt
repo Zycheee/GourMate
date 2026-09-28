@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+websockets
+google-genai
+faster-whisper
+silero-vad
+# True streaming partial STT (offline zipformer). CPU wheels for Linux/macOS/Windows.
+sherpa-onnx
+edge-tts
+numpy
+slowapi
+pydantic-settings
+python-dotenv
