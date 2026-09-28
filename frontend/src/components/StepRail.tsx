@@ -15,7 +15,7 @@ export default function StepRail() {
 
   return (
     <div className="w-full">
-      <p className="font-mono text-12 uppercase tracking-[0.18em] text-ink-muted tabular-nums">
+      <p className="font-mono text-11 uppercase tracking-[0.18em] text-ink-muted tabular-nums">
         {UI.stepOf(currentStepIndex + 1, total)}
       </p>
       <ol
