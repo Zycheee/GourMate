@@ -303,6 +303,15 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
     <div className="relative h-[100dvh] overflow-hidden bg-bg text-ink">
+      {/* Modern kitchen photo background */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/MODERN2-KITCHEN.jpg')" }}
+      >
+        {/* Soft overlay for visual depth and high contrast readability */}
+        <div className="absolute inset-0 bg-black/15 dark:bg-black/45 backdrop-blur-[0.5px]" />
+      </div>
+
       {/* Frosted accent orbs — behind the full-bleed canvas. */}
       <GlassBackdrop />
 
