@@ -1,7 +1,7 @@
 {
-  "$comment": "Golden wire-contract manifest for GourMate (ChefSight). Source of truth: docs/decisions/gourmate.architecture.md sections 6-11 and specs/gourmate.spec.md sections 6-7. Both backend/tests/test_protocol.py and frontend/src/__tests__/types.contract.test.ts load this file and fail on drift.",
+  "$comment": "Golden wire-contract manifest for GourMate (ChefSight). Mirrors backend/app/schemas.py and frontend/src/types.ts. Both backend/tests/test_protocol.py and frontend/src/__tests__/types.contract.test.ts load this file and fail on drift.",
   "version": "1.0.0",
-  "source": "docs/decisions/gourmate.architecture.md",
+  "source": "backend/app/schemas.py",
   "transport": {
     "ws_endpoint": "/ws/session",
     "binary_frame": "Int16 PCM, 16 kHz mono, 20-40 ms frames"

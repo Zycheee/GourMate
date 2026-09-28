@@ -1,7 +1,9 @@
-# Build-context exclusions for the GourMate backend image.
+# Build-context exclusions for the GourMate backend image on Railway.
 #
-# The Docker context is the repository root (see backend/Dockerfile and
-# railway.json), so patterns are written to match at any depth (`**/`).
+# Railway's Dockerfile builder uses the service root (this repository root) as
+# the Docker build context, so it reads THIS file rather than
+# backend/.dockerignore. Patterns are depth-agnostic (`**/`) so they match from
+# the repository root; the backend/Dockerfile consumes `backend/...` paths.
 
 # Python bytecode / caches
 **/__pycache__/
@@ -33,6 +35,9 @@ venv/
 **/.pytest_cache/
 **/.coverage
 **/htmlcov/
+
+# Frontend is deployed separately (Vercel); keep it out of the API image.
+frontend/
 
 # Tooling / VCS / docs
 **/.git/

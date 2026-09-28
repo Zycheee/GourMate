@@ -2,8 +2,7 @@
 
 Hands-free voice cooking assistant (persona **ChefSight**). React + TypeScript + Vite + Tailwind CSS PWA, with a procedural R3F avatar that is the status system.
 
-See the root [`README.md`](../README.md) for full-stack setup and
-[`docs/decisions/`](../docs/decisions/) for the architecture, tech-stack and design records.
+See the root [`README.md`](../README.md) for full-stack setup.
 
 ## Run
 

@@ -1,15 +1,15 @@
 # GourMate (ChefSight) Backend
 
 Async FastAPI backend for the hands-free voice cooking assistant. It owns the
-always-listening voice loop: PCM in, Silero VAD, faster-whisper STT, Gemini 2.5
-Flash turns with tool calls, and sentence-streamed edge-tts MP3 out.
+always-listening voice loop: PCM in, Silero VAD, faster-whisper STT, Gemini 3.5
+Flash Lite turns with tool calls, and sentence-streamed edge-tts MP3 out.
 
-Contract source of truth: `docs/decisions/gourmate.architecture.md` sections 5–11.
-Secrets and models are server-side only. No raw audio, transcript or recipe is
-ever persisted server-side.
+Contract source of truth: [`contracts/ws-events.json`](../contracts/ws-events.json)
+(the golden manifest), mirrored by `app/schemas.py`. Secrets and models are
+server-side only. No raw audio, transcript or recipe is ever persisted
+server-side.
 
-See the root [`README.md`](../README.md) for full-stack setup and
-[`docs/decisions/`](../docs/decisions/) for the architecture, tech-stack and design records.
+See the root [`README.md`](../README.md) for full-stack setup.
 
 ## Module map
 

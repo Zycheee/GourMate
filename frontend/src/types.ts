@@ -1,8 +1,8 @@
 /**
  * GourMate — canonical client types.
  *
- * Mirrors `docs/decisions/gourmate.architecture.md` §6 (data schemas) and
- * §7 (WebSocket protocol) exactly. No invented event names or fields.
+ * Mirrors the golden manifest `contracts/ws-events.json` plus the Pydantic
+ * models in `backend/app/schemas.py` exactly. No invented event names or fields.
  */
 
 /* ------------------------------------------------------------------ */

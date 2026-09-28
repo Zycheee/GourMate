@@ -44,8 +44,10 @@ end-of-utterance detection and barge-in. The client owns the `Recipe` JSON; the
 LLM emits tool calls that the client executes. Pure navigation turns are
 answered from `Recipe` without spending a Gemini round-trip.
 
-Full details and data schemas:
-[`docs/decisions/gourmate.architecture.md`](docs/decisions/gourmate.architecture.md).
+The wire contract is machine-checked: the golden manifest
+[`contracts/ws-events.json`](contracts/ws-events.json) is mirrored by the Pydantic
+models in [`backend/app/schemas.py`](backend/app/schemas.py) and the TypeScript
+types in [`frontend/src/types.ts`](frontend/src/types.ts).
 
 ## Tech stack
 
@@ -66,9 +68,7 @@ Full details and data schemas:
 | Persistence | Browser `localStorage` |
 | Rate limiting | `slowapi` (REST) + in-process counters |
 | Frontend hosting | Vercel |
-| Backend hosting | Fly.io + persistent volume |
-
-Rationale for each choice: [`docs/decisions/gourmate.techstack.md`](docs/decisions/gourmate.techstack.md).
+| Backend hosting | Railway (Dockerfile) + persistent volume |
 
 ## Prerequisites
 
@@ -109,9 +109,9 @@ uvicorn app.main:app --reload --port 8080
 - REST: `POST /api/recipes/generate`, `POST /api/recipes/parse`.
 - WebSocket: `ws://localhost:8080/ws/session`.
 
-> **Port:** the backend, the Dockerfile, and `fly.toml` all use port **8080**, and
-> `frontend/.env.example` defaults to `VITE_WS_URL=ws://localhost:8080`, so the
-> local pair matches out of the box.
+> **Port:** locally the backend and `frontend/.env.example` both use port **8080**,
+> so the pair matches out of the box. In production the container binds to
+> `$PORT` (falling back to `8080`), as injected by the host.
 
 ## Frontend — setup and run
 
@@ -157,16 +157,14 @@ The frontend test harness is `frontend/vitest.config.ts` (jsdom) with setup in
 
 ## Deployment
 
-Topology per [`docs/decisions/gourmate.architecture.md` §13](docs/decisions/gourmate.architecture.md). The configs are committed:
+The configs are committed:
 
-- **Backend → Fly.io**: [`backend/Dockerfile`](backend/Dockerfile) (CPU-only,
-  `HF_HOME=/data/hf`, non-root, port `8080`) built with [`fly.toml`](fly.toml).
-  The `gourmate_models` volume mounts at `/data` and caches the whisper + silero +
-  streaming-zipformer weights across cold starts; `min_machines_running = 1` keeps one machine warm.
-  - Deploy: `fly deploy`.
-  - Secret: `fly secrets set GEMINI_API_KEY=...` — never placed in `fly.toml`
-    (intentionally absent from `[env]`).
-  - Health check: `GET /api/health`.
+- **Backend → Railway**: [`railway.json`](railway.json) selects the Dockerfile
+  builder ([`backend/Dockerfile`](backend/Dockerfile) — CPU-only, `HF_HOME=/data/hf`,
+  non-root, binds to `$PORT` with a `8080` fallback). Mount a Railway volume at
+  `/data` so the whisper + silero weights are cached across deploys, and set
+  `GEMINI_API_KEY` (secret) plus `ALLOWED_ORIGINS` to the deployed Vercel origin.
+  The health check is `GET /api/health`.
 - **Frontend → Vercel**: [`frontend/vercel.json`](frontend/vercel.json) — Vite
   framework, `npm run build`, output `dist`, SPA rewrites, immutable asset caching.
 - **CI**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the backend
@@ -174,29 +172,10 @@ Topology per [`docs/decisions/gourmate.architecture.md` §13](docs/decisions/gou
 - Set `ALLOWED_ORIGINS` to the deployed Vercel origin so CORS and the WS origin
   check pass.
 
-## Documentation
-
-| Doc | Contents |
-| :--- | :--- |
-| [`specs/gourmate.spec.md`](specs/gourmate.spec.md) | Product scope, functional requirements, rate limits, error handling, NFRs, acceptance criteria |
-| [`docs/decisions/gourmate.techstack.md`](docs/decisions/gourmate.techstack.md) | Stack choices, decision tables, value-source audit, dependencies, env defaults |
-| [`docs/decisions/gourmate.architecture.md`](docs/decisions/gourmate.architecture.md) | System context, data schemas (§6), WS protocol (§7), REST (§8), tools (§9), rate limits (§10), errors (§11), security, deployment |
-| [`docs/decisions/gourmate.design.md`](docs/decisions/gourmate.design.md) | UI/UX: tokens, 3D character spec, avatar state system, screens, accessibility, copy |
-
-Agent-facing context (repo map, conventions, commands, env vars, open items):
-[`AGENTS.md`](AGENTS.md).
-
-## Provenance
-
-The original one-page concept (pre-spec) is archived at
-[`docs/archive/GourMate.concept.md`](docs/archive/GourMate.concept.md); it is
-superseded by the spec and decision records above and kept only for provenance.
-
 ## Roadmap
 
-From [`specs/gourmate.spec.md` §10](specs/gourmate.spec.md). "Status" reflects
-what is present in the repo; the QA suites cover the contract offline, not a
-deployed verification run.
+"Status" reflects what is present in the repo; the QA suites cover the contract
+offline, not a deployed verification run.
 
 | Phase | Deliverable | Exit criteria | Status |
 | :--- | :--- | :--- | :--- |
@@ -206,7 +185,7 @@ deployed verification run.
 | 3 | Recipe pipeline: parse + generate → `Recipe` | Both intake paths produce valid JSON | Code present |
 | 4 | Timers + notifications + cookbook | Timer survives refresh; alerts fire | Code present |
 | 5 | Rate limits + error taxonomy + polish | RL/EH acceptance tests pass | Code present; pytest + vitest suites committed |
-| 6 | Deploy: Fly.io volume, Vercel, docs | Public URL, acceptable cold start | Configs present: Dockerfile, `fly.toml`, `vercel.json`, CI workflow |
+| 6 | Deploy: Railway volume, Vercel | Public URL, acceptable cold start | Configs present: Dockerfile, `railway.json`, `vercel.json`, CI workflow |
 
 ## Repository layout
 
@@ -229,11 +208,8 @@ GourMate/
 ├─ contracts/
 │  └─ ws-events.json     # golden cross-cutting wire-contract manifest
 ├─ .github/workflows/ci.yml   # backend pytest + frontend build
-├─ fly.toml              # Fly.io app, /data volume, port 8080
+├─ railway.json          # Railway build/deploy config (Dockerfile builder)
+├─ .dockerignore         # root-context build exclusions
 ├─ .gitignore
-├─ specs/                # product specification
-├─ docs/decisions/       # tech stack, architecture, UI/UX design
-├─ docs/archive/         # original concept, kept for provenance
-├─ AGENTS.md             # agent-facing repo context
 └─ README.md
 ```

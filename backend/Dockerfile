@@ -67,9 +67,12 @@ USER appuser
 
 EXPOSE 8080
 
-# Readiness probe mirrors Fly's http_service check (architecture §8).
+# Readiness probe mirrors the platform http check (architecture §8). Honors
+# $PORT because Railway injects it; defaults to 8080 for Fly/local.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4).status == 200 else 1)"]
+    CMD python -c "import os, sys, urllib.request; port = os.environ.get('PORT', '8080'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/api/health', timeout=4).status == 200 else 1)"
 
-# `--ws websockets` matches backend/README.md.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--ws", "websockets"]
+# Bind to $PORT (Railway) with an 8080 fallback (local). `exec` keeps uvicorn
+# as PID 1 so it receives signals directly. `--ws websockets` matches
+# backend/README.md.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --ws websockets"]
