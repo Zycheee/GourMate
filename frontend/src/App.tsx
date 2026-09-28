@@ -309,66 +309,63 @@ export default function App() {
       {/* Full-screen 3D canvas layer — the model glides around open cards. */}
       {avatarLayer}
 
-      {/* Brand — top-left; pointer-transparent so it never blocks controls. */}
-      <motion.div
-        className="pointer-events-none absolute left-4 top-4 z-40 flex items-center gap-2"
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring, delay: 0.15 }}
-      >
-        <ChefHat className="h-5 w-5 text-accent" aria-hidden="true" />
-        <span className="shrink-0 font-display text-20 font-semibold text-ink">{UI.appName}</span>
-        {recipe && (
-          <>
-            <span aria-hidden="true" className="text-ink-muted">
-              ·
-            </span>
-            {/* Optional recipe echo — truncates, the brand itself never does. */}
-            <span className="hidden max-w-[22ch] truncate text-16 text-ink-muted lg:block">
-              {recipe.title}
-            </span>
-          </>
-        )}
-      </motion.div>
+      {/* Apple-style translucent header — logo and app name on left, settings button on right */}
+      <header className="fixed top-0 inset-x-0 z-40 flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6 glass-header">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <ChefHat className="h-5 w-5 sm:h-6 sm:w-6 text-accent shrink-0" aria-hidden="true" />
+          <span className="shrink-0 font-display text-18 sm:text-20 font-semibold tracking-tight text-ink">
+            {UI.appName}
+          </span>
+          {recipe && (
+            <>
+              <span aria-hidden="true" className="text-ink-muted/50 hidden sm:inline">
+                ·
+              </span>
+              <span className="hidden sm:inline max-w-[20ch] md:max-w-[30ch] truncate text-13 sm:text-14 font-medium text-ink-muted">
+                {recipe.title}
+              </span>
+            </>
+          )}
+        </div>
 
-        {/* Floating controls (top-right) — the old full-width header is gone. */}
-        <div className="pointer-events-auto absolute top-4 right-4 z-40 flex items-center gap-1.5 rounded-full glass p-1.5">
-        {phase === "cooking" && (
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {phase === "cooking" && (
+            <motion.button
+              type="button"
+              onClick={handleEndSession}
+              aria-label={UI.endSession}
+              title={UI.endSession}
+              {...pressProps}
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Power className="h-4 w-4" />
+            </motion.button>
+          )}
+          {phase === "cooking" && (
+            <motion.button
+              type="button"
+              onClick={toggleFocus}
+              aria-pressed={focusMode}
+              aria-label={focusMode ? UI.exitFocusMode : UI.focusMode}
+              title={focusMode ? UI.exitFocusMode : UI.focusMode}
+              {...pressProps}
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </motion.button>
+          )}
           <motion.button
             type="button"
-            onClick={handleEndSession}
-            aria-label={UI.endSession}
-            title={UI.endSession}
+            onClick={() => setSettingsOpen(true)}
+            aria-label={UI.settings}
+            title={UI.settings}
             {...pressProps}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border border-black/5 dark:border-white/10 bg-surface/50 text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
           >
-            <Power className="h-5 w-5" />
+            <Settings2 className="h-4 w-4" />
           </motion.button>
-        )}
-        {phase === "cooking" && (
-          <motion.button
-            type="button"
-            onClick={toggleFocus}
-            aria-pressed={focusMode}
-            aria-label={focusMode ? UI.exitFocusMode : UI.focusMode}
-            title={focusMode ? UI.exitFocusMode : UI.focusMode}
-            {...pressProps}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            {focusMode ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-          </motion.button>
-        )}
-        <motion.button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          aria-label={UI.settings}
-          title={UI.settings}
-          {...pressProps}
-          className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <Settings2 className="h-5 w-5" />
-        </motion.button>
-      </div>
+        </div>
+      </header>
 
       {/* Top-center column — triage first, then notifications (sound prompt +
           toasts) so both stay readable and never cover the floating controls. */}
@@ -385,14 +382,14 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.97 }}
               transition={spring}
-              className="flex w-full items-center gap-3 rounded-md border border-white/10 bg-surface px-4 py-3 shadow-warm"
+              className="flex w-full items-center gap-2.5 rounded-2xl glass px-4 py-2.5 shadow-warm"
             >
               <Volume2 className="h-4 w-4 shrink-0 text-steel" aria-hidden="true" />
               <motion.button
                 type="button"
                 onClick={handleEnableSound}
                 {...pressProps}
-                className="min-h-[44px] flex-1 text-left text-14 font-medium text-ink transition-colors duration-micro ease-ui hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-8 flex-1 text-left text-12 sm:text-13 font-medium text-ink transition-colors duration-micro ease-ui hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {UI.tapToEnableSound}
               </motion.button>
@@ -401,9 +398,9 @@ export default function App() {
                 onClick={() => setSoundPrompt(false)}
                 aria-label={UI.dismiss}
                 {...pressProps}
-                className="rounded-sm p-1.5 text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-black/5 dark:hover:bg-white/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </motion.button>
             </motion.div>
           )}
