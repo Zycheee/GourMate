@@ -30,13 +30,17 @@ export default {
         mono: ['"Geist Mono"', "ui-monospace", "monospace"]
       },
       fontSize: {
-        "12": ["12px", { lineHeight: "16px" }],
-        "14": ["14px", { lineHeight: "20px" }],
-        "16": ["16px", { lineHeight: "24px" }],
-        "20": ["20px", { lineHeight: "28px" }],
-        "28": ["28px", { lineHeight: "34px" }],
-        "40": ["40px", { lineHeight: "44px" }],
-        "56": ["56px", { lineHeight: "60px" }]
+        "10": ["0.625rem", { lineHeight: "1.3", letterSpacing: "0.06em" }],
+        "11": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.06em" }],
+        "12": ["clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem)", { lineHeight: "1.35" }],
+        "13": ["clamp(0.75rem, 0.72rem + 0.15vw, 0.8125rem)", { lineHeight: "1.4" }],
+        "14": ["clamp(0.78125rem, 0.74rem + 0.2vw, 0.875rem)", { lineHeight: "1.4" }],
+        "16": ["clamp(0.84375rem, 0.8rem + 0.25vw, 0.9375rem)", { lineHeight: "1.5" }],
+        "18": ["clamp(0.9375rem, 0.88rem + 0.3vw, 1.0625rem)", { lineHeight: "1.4" }],
+        "20": ["clamp(1.03125rem, 0.96rem + 0.4vw, 1.1875rem)", { lineHeight: "1.3", letterSpacing: "-0.015em" }],
+        "28": ["clamp(1.2rem, 1.08rem + 0.65vw, 1.5rem)", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
+        "40": ["clamp(1.45rem, 1.25rem + 1vw, 2rem)", { lineHeight: "1.15", letterSpacing: "-0.025em" }],
+        "56": ["clamp(1.75rem, 1.45rem + 1.5vw, 2.5rem)", { lineHeight: "1.1", letterSpacing: "-0.03em" }]
       },
       borderRadius: {
         sm: "8px",
