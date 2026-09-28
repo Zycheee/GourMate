@@ -107,7 +107,7 @@ function ExpandedTimer({
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-sm flex-col items-center rounded-lg glass-strong p-8 shadow-warm-lg"
+        className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-black/5 dark:border-white/10 glass-strong p-6 text-center shadow-warm-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative" style={{ width: size, height: size }}>
@@ -126,20 +126,20 @@ function ExpandedTimer({
               transform={`rotate(-90 ${size / 2} ${size / 2})`}
             />
           </svg>
-          <p className="absolute inset-0 flex items-center justify-center font-mono text-40 text-ink tabular-nums">
+          <p className="absolute inset-0 flex items-center justify-center font-mono text-28 sm:text-40 font-semibold text-ink tabular-nums">
             {formatMMSS(remaining / 1000)}
           </p>
         </div>
 
-        <p className="mt-4 font-display text-28 text-ink">{timer.label}</p>
+        <p className="mt-3.5 font-display text-18 sm:text-20 font-semibold tracking-tight text-ink">{timer.label}</p>
 
-        <div className="mt-8 flex w-full flex-col gap-3">
-          <div className="flex gap-3">
+        <div className="mt-6 flex w-full flex-col gap-2.5">
+          <div className="flex gap-2.5">
             <motion.button
               type="button"
               onClick={() => updateTimer(timer.id, { ends_at: timer.ends_at + 60_000 })}
               {...pressProps}
-              className="min-h-[44px] flex-1 rounded-md bg-accent-strong px-6 py-3 text-16 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="h-9 sm:h-9.5 flex-1 rounded-xl bg-accent-strong px-4 text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {UI.timerAddOne}
             </motion.button>
@@ -147,7 +147,7 @@ function ExpandedTimer({
               type="button"
               onClick={() => updateTimer(timer.id, { ends_at: timer.ends_at + 300_000 })}
               {...pressProps}
-              className="min-h-[44px] flex-1 rounded-md bg-accent-strong px-6 py-3 text-16 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="h-9 sm:h-9.5 flex-1 rounded-xl bg-accent-strong px-4 text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {UI.timerAddFive}
             </motion.button>
@@ -159,7 +159,7 @@ function ExpandedTimer({
               onClose();
             }}
             {...pressProps}
-            className="min-h-[44px] rounded-md border border-ember/50 px-6 py-3 text-16 font-medium text-ember transition-colors duration-micro ease-ui hover:bg-ember/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+            className="h-9 sm:h-9.5 rounded-xl border border-ember/40 bg-ember/5 px-4 text-13 font-medium text-ember shadow-sm transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
           >
             {UI.timerExpandedCancel}
           </motion.button>
@@ -202,15 +202,15 @@ export default function TimerRings() {
                     aria-label={`${timer.label}, ${formatMMSS(remaining / 1000)} remaining`}
                     {...pressProps}
                     className={[
-                      "flex min-h-[44px] w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors duration-micro ease-ui hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      "flex h-9 sm:h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-1 text-left transition-colors duration-micro ease-ui hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       done ? "timer-pulse" : ""
                     ].join(" ")}
                   >
                     <Ring timer={timer} now={now} hueIndex={i} size={RING_SIZE} />
-                    <span className="flex-1 truncate text-14 text-ink">{timer.label}</span>
+                    <span className="flex-1 truncate text-12 sm:text-13 font-medium text-ink">{timer.label}</span>
                     <span
                       className={[
-                        "font-mono text-14 tabular-nums",
+                        "font-mono text-12 sm:text-13 tabular-nums",
                         done ? "text-verdigris" : "text-ink-muted"
                       ].join(" ")}
                     >
