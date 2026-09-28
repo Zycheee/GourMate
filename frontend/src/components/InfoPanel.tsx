@@ -96,7 +96,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
               type="button"
               onClick={() => onSendText(UI.plan.doneCookingText)}
               {...pressProps}
-              className="inline-flex min-h-[44px] items-center rounded-md bg-accent-strong px-4 py-3 text-14 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-accent-strong px-3.5 py-1 text-12 sm:text-13 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
             >
               {UI.plan.doneCooking}
             </motion.button>
@@ -105,7 +105,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
             type="button"
             onClick={() => onSendText(cancelText)}
             {...pressProps}
-            className="inline-flex min-h-[44px] items-center rounded-md border border-white/10 bg-surface-2 px-4 py-3 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
           >
             {cancelLabel}
           </motion.button>
@@ -114,16 +114,16 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
       {/* Completion card — the recipe is done; "Cook something else" sends the
           discontinue line and the server's `reset` returns to intake. */}
       {phase === "done" && (
-        <div className="w-full rounded-lg glass px-6 py-5 shadow-warm transition-colors duration-layout ease-ui sm:px-8 sm:py-6">
-          <h2 className="font-display text-28 font-semibold leading-tight text-ink">
+        <div className="w-full rounded-2xl glass px-5 py-4 shadow-warm transition-colors duration-layout ease-ui sm:px-6 sm:py-5">
+          <h2 className="font-display text-20 sm:text-28 font-semibold leading-tight text-ink">
             {UI.done.title}
           </h2>
-          <p className="mt-2 text-16 leading-relaxed text-ink-muted">{UI.done.body}</p>
+          <p className="mt-1.5 text-13 sm:text-14 leading-relaxed text-ink-muted">{UI.done.body}</p>
           <motion.button
             type="button"
             onClick={() => onSendText(UI.plan.stopCookingText)}
             {...pressProps}
-            className="mt-4 min-h-[44px] w-full rounded-md bg-accent-strong px-6 py-3 text-16 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="mt-3.5 h-9 sm:h-10 w-full rounded-xl bg-accent-strong px-4 text-13 sm:text-14 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             {UI.done.action}
           </motion.button>
@@ -147,7 +147,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
         </>
       )}
       {/* No plan yet — the Planner waits for the first dish. */}
-      {!recipe && <p className="text-16 leading-relaxed text-ink-muted">{UI.plan.empty}</p>}
+      {!recipe && <p className="text-13 sm:text-14 leading-relaxed text-ink-muted">{UI.plan.empty}</p>}
     </div>
   );
 
@@ -157,7 +157,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
    * scaling cannot clobber the centering.
    */
   const edgeHandle =
-    "absolute top-1/2 z-10 flex h-11 w-11 items-center justify-center rounded-full glass text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+    "absolute top-1/2 z-10 flex h-8 w-8 sm:h-8.5 sm:w-8.5 items-center justify-center rounded-full glass text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm";
 
   /* ------------------------------ desktop ------------------------------ */
 
@@ -186,9 +186,9 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
               aria-label={UI.panel.expand}
               title={UI.panel.expand}
               {...pressProps}
-              className="flex min-h-[44px] items-center gap-2 rounded-full glass px-4 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex h-9 sm:h-9.5 items-center gap-2 rounded-full glass border border-black/5 dark:border-white/10 px-3.5 sm:px-4 text-13 sm:text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-4 w-4 shrink-0" />
               {railLabel}
             </motion.button>
           </motion.aside>
@@ -217,14 +217,14 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
               style={{ x: "-50%", y: "-50%" }}
               className={`${edgeHandle} left-0`}
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-4 w-4" />
             </motion.button>
             {/* Header row — the Planner label (the brand echo carries the
                 recipe title). */}
-            <div className="flex items-center border-b border-white/10 px-5 py-3">
-              <h1 className="font-display text-20 font-semibold text-ink">{panelName}</h1>
+            <div className="flex items-center border-b border-black/5 dark:border-white/10 px-5 py-2.5">
+              <h1 className="font-display text-16 sm:text-18 font-semibold tracking-tight text-ink">{panelName}</h1>
             </div>
-            <div className="no-scrollbar flex-1 overflow-y-auto pb-4 pl-7 pr-5 pt-4">
+            <div className="no-scrollbar flex-1 overflow-y-auto pb-4 pl-6 pr-5 pt-3.5">
               {body}
             </div>
           </motion.aside>
@@ -240,23 +240,24 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
   return (
     <section
       aria-label={railLabel}
-      className="flex w-full flex-col rounded-t-lg glass"
+      className="flex w-full flex-col rounded-t-2xl glass"
     >
+      <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-ink-muted/25" aria-hidden="true" />
       <motion.button
         type="button"
         onClick={() => setSheetOpen((v) => !v)}
         aria-expanded={sheetOpen}
         {...(sheetOpen ? { "aria-controls": "info-sheet-body" } : {})}
         {...pressProps}
-        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 pb-1 pt-3 text-left transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex h-9 w-full items-center justify-between gap-3 px-4 pb-1 pt-1 text-left transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className="font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">
+        <span className="font-mono text-11 uppercase tracking-[0.16em] text-ink-muted">
           {railLabel}
         </span>
         {sheetOpen ? (
-          <ChevronDown className="h-5 w-5 text-ink-muted" aria-hidden="true" />
+          <ChevronDown className="h-4 w-4 text-ink-muted" aria-hidden="true" />
         ) : (
-          <ChevronUp className="h-5 w-5 text-ink-muted" aria-hidden="true" />
+          <ChevronUp className="h-4 w-4 text-ink-muted" aria-hidden="true" />
         )}
       </motion.button>
       {sheetOpen && (
