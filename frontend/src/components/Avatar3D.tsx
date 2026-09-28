@@ -16,9 +16,8 @@ import { animated, useSpring } from "@react-spring/three";
 import * as THREE from "three";
 import { useSession } from "../store/session";
 import { getMicLevel, getMicPeak, getMouthLevel } from "../lib/audio";
-import { MODEL_COLOR, THEME_COLORS, useResolvedTheme } from "../lib/theme";
+import { MODEL_COLOR } from "../lib/theme";
 import { useAvatarOffsetPx } from "../lib/avatarOffset";
-import ModernKitchen3D from "./ModernKitchen3D";
 import type { VoiceState } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -1146,10 +1145,6 @@ export default function Avatar3D() {
   const voiceState = useSession((s) => s.voiceState);
   const reduced = usePrefersReducedMotion();
   const tier = useMemo(detectDeviceTier, []);
-  // Resolved from `settings.theme` + matchMedia (same inputs as `data-theme`),
-  // so the canvas surface matches the UI on the very render of a toggle.
-  const theme = useResolvedTheme();
-  const bg = THEME_COLORS[theme];
 
   // Receding is disabled: the avatar stays dead-center (Phase 1 layout rework).
   const receded = false;
@@ -1160,24 +1155,19 @@ export default function Avatar3D() {
       camera={{ position: [0, 0.25, 4.6], fov: 32 }}
       gl={{
         antialias: tier !== "low",
+        alpha: true,
         powerPreference: tier === "low" ? "low-power" : "high-performance",
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: 1.22
       }}
       style={{ position: "absolute", inset: 0 }}
     >
-      <color attach="background" args={[bg]} />
-      <fog attach="fog" args={[bg, 8, 18]} />
-
       <Environment frames={1} resolution={tier === "low" ? 64 : 256}>
         <Lightformer form="rect" intensity={3.4} color="#FFF3DC" position={[-2.6, 2.4, 2.6]} rotation={[0.1, 0.7, 0]} scale={[3, 3, 1]} />
         <Lightformer form="rect" intensity={1.8} color="#9BA8B0" position={[3.2, 1.6, -2.2]} rotation={[0, -0.9, 0]} scale={[4, 2.4, 1]} />
         <Lightformer form="ring" intensity={1.5} color="#FFFFFF" position={[-1.4, 3.2, 0.4]} scale={[4, 4, 1]} />
         <Lightformer form="rect" intensity={7} color="#FFFFFF" position={[-1.6, 1.8, 2.9]} rotation={[0, 0.25, 0]} scale={[0.7, 1.1, 1]} />
       </Environment>
-
-      {/* 3D Modern Kitchen Background */}
-      <ModernKitchen3D />
 
       <RecedingGroup receded={receded}>
         <AvatarFigure voiceState={voiceState} reduced={reduced} tier={tier} base={BODY_ORANGE} />
