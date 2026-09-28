@@ -18,6 +18,7 @@ import { useSession } from "../store/session";
 import { getMicLevel, getMicPeak, getMouthLevel } from "../lib/audio";
 import { MODEL_COLOR, THEME_COLORS, useResolvedTheme } from "../lib/theme";
 import { useAvatarOffsetPx } from "../lib/avatarOffset";
+import ModernKitchen3D from "./ModernKitchen3D";
 import type { VoiceState } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -1174,6 +1175,9 @@ export default function Avatar3D() {
         <Lightformer form="ring" intensity={1.5} color="#FFFFFF" position={[-1.4, 3.2, 0.4]} scale={[4, 4, 1]} />
         <Lightformer form="rect" intensity={7} color="#FFFFFF" position={[-1.6, 1.8, 2.9]} rotation={[0, 0.25, 0]} scale={[0.7, 1.1, 1]} />
       </Environment>
+
+      {/* 3D Modern Kitchen Background */}
+      <ModernKitchen3D />
 
       <RecedingGroup receded={receded}>
         <AvatarFigure voiceState={voiceState} reduced={reduced} tier={tier} base={BODY_ORANGE} />
