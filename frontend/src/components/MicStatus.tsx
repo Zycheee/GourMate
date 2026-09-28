@@ -53,22 +53,22 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
           : "bg-tallow";
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-2.5 rounded-full glass px-4 py-2.5">
-        <span className="relative flex h-3 w-3 items-center justify-center" aria-hidden="true">
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-8.5 sm:h-9 items-center gap-2 rounded-full glass px-3.5 shadow-sm">
+        <span className="relative flex h-2.5 w-2.5 items-center justify-center" aria-hidden="true">
           {!muted && !offline && level > 0.02 && (
             <span
               className="absolute inline-flex h-full w-full rounded-full bg-accent/50"
               style={{ transform: `scale(${1 + level * 2.2})`, opacity: 0.25 + level * 0.5 }}
             />
           )}
-          <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dotColor}`} />
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${dotColor}`} />
         </span>
-        <span className="text-14 font-medium text-ink">{label}</span>
+        <span className="text-12 sm:text-13 font-medium text-ink">{label}</span>
         {offline ? (
-          <WifiOff className="h-3.5 w-3.5 text-steel" aria-hidden="true" />
+          <WifiOff className="h-3 w-3 text-steel" aria-hidden="true" />
         ) : (
-          <Wifi className="h-3.5 w-3.5 text-steel" aria-hidden="true" />
+          <Wifi className="h-3 w-3 text-steel" aria-hidden="true" />
         )}
       </div>
 
@@ -80,14 +80,14 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
         title={muted ? UI.unmute : UI.mute}
         {...pressProps}
         className={[
-          "flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-micro ease-ui",
+          "flex h-8.5 w-8.5 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors duration-micro ease-ui shadow-sm",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           muted
             ? "bg-steel/25 text-ink hover:bg-steel/35"
-            : "bg-surface/85 text-ink hover:bg-surface-2/90"
+            : "bg-surface/90 dark:bg-surface-2/90 text-ink hover:bg-surface"
         ].join(" ")}
       >
-        {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
       </motion.button>
     </div>
   );

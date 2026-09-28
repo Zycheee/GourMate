@@ -165,21 +165,21 @@ export default function SpeechCheckCard() {
     <section
       id="speech-check"
       aria-label={UI.speechTest.title}
-      className="border-b border-white/10 px-6 py-4"
+      className="border-b border-black/5 dark:border-white/10 px-4 py-3"
     >
-      <h3 className="font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">
+      <h3 className="font-mono text-11 uppercase tracking-[0.16em] text-ink-muted">
         {UI.speechTest.title}
       </h3>
-      <p className="mt-2 text-14 text-ink-muted">{UI.speechTest.prompt}</p>
-      <p className="mt-1 font-display text-20 text-ink">“{phrase}”</p>
+      <p className="mt-1 text-12 sm:text-13 text-ink-muted">{UI.speechTest.prompt}</p>
+      <p className="mt-1 font-display text-16 sm:text-18 font-semibold tracking-tight text-ink">“{phrase}”</p>
 
       {/* Live mic diagnostic — is the mic hot before reading the phrase? */}
       <InputLevelMeter />
 
       {/* Status + result — polite so updates land without stealing focus. */}
-      <div aria-live="polite" aria-atomic="true" className="mt-3 min-h-[2.5rem]">
+      <div aria-live="polite" aria-atomic="true" className="mt-2.5 min-h-[2rem]">
         {armed ? (
-          <p className="flex items-center gap-2 text-16 text-ink">
+          <p className="flex items-center gap-2 text-13 sm:text-14 text-ink">
             <span
               aria-hidden="true"
               className="h-2 w-2 shrink-0 rounded-full bg-accent animate-pulse motion-reduce:animate-none"
@@ -187,19 +187,19 @@ export default function SpeechCheckCard() {
             {UI.speechTest.listening}
           </p>
         ) : result ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <div>
-              <p className="font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">
+              <p className="font-mono text-11 uppercase tracking-[0.16em] text-ink-muted">
                 {UI.speechTest.scoreLabel}
               </p>
-              <p className="font-display text-40 tabular-nums text-ink">
+              <p className="font-display text-28 sm:text-36 font-semibold tabular-nums text-ink">
                 {UI.speechTest.percent(Math.round(result.score * 100))}
               </p>
             </div>
             {/* Per-word highlight of the target: matched = verdigris,
                 missing = ember + strikethrough (plus an sr-only marker so
                 the diff is not color-only). */}
-            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-16">
+            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-13 sm:text-14">
               {result.words.map((w, i) => (
                 <span
                   key={`${i}-${w.word}`}
@@ -213,24 +213,24 @@ export default function SpeechCheckCard() {
               ))}
             </p>
             {result.extras.length > 0 && (
-              <p className="text-14 text-ember">
+              <p className="text-12 sm:text-13 text-ember">
                 {UI.speechTest.extraPrefix} {result.extras.join(" ")}
               </p>
             )}
-            <p className="text-14 text-ink-muted">
+            <p className="text-12 sm:text-13 text-ink-muted">
               {UI.speechTest.heardPrefix} “{result.heard}”
             </p>
           </div>
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <motion.button
           type="button"
           onClick={startTest}
           disabled={armed}
           {...pressProps}
-          className="inline-flex min-h-[44px] items-center rounded-md bg-accent-strong px-5 py-2 text-14 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-accent-strong px-3.5 py-1 text-12 sm:text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
         >
           {result ? UI.speechTest.retry : UI.speechTest.start}
         </motion.button>
@@ -238,7 +238,7 @@ export default function SpeechCheckCard() {
           type="button"
           onClick={nextPhrase}
           {...pressProps}
-          className="inline-flex min-h-[44px] items-center rounded-md border border-white/10 bg-surface-2 px-5 py-2 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 py-1 text-12 sm:text-13 font-medium text-ink-muted shadow-sm transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {UI.speechTest.next}
         </motion.button>
