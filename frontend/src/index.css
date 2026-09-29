@@ -69,10 +69,10 @@
   --accent-strong-rgb: 173 80 21;
 
   /* Frosted glass (design rework — glassmorphism) */
-  --glass-bg: rgb(255 255 255 / 0.55);
-  --glass-bg-strong: rgb(255 255 255 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.65);
-  --glass-highlight: rgb(255 255 255 / 0.9);
+  --glass-bg: rgb(255 255 255 / 0.65);
+  --glass-bg-strong: rgb(255 255 255 / 0.85);
+  --glass-border: rgb(255 255 255 / 0.45);
+  --glass-highlight: rgb(255 255 255 / 0.8);
 
   /* Tallow-family timer hues (design open item 3) — AA on light surfaces */
   --timer-1: #c8821a;
@@ -111,7 +111,7 @@
     --steel-rgb: 155 168 176;
 
     /* Frosted glass */
-    --glass-bg: rgb(30 26 23 / 0.55);
+    --glass-bg: rgb(30 26 23 / 0.60);
     --glass-bg-strong: rgb(30 26 23 / 0.82);
     --glass-border: rgb(255 255 255 / 0.12);
     --glass-highlight: rgb(255 255 255 / 0.16);
@@ -151,7 +151,7 @@
   --steel-rgb: 155 168 176;
 
   /* Frosted glass */
-  --glass-bg: rgb(30 26 23 / 0.55);
+  --glass-bg: rgb(30 26 23 / 0.60);
   --glass-bg-strong: rgb(30 26 23 / 0.82);
   --glass-border: rgb(255 255 255 / 0.12);
   --glass-highlight: rgb(255 255 255 / 0.16);
@@ -174,6 +174,9 @@
 
 html {
   color-scheme: light;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -182,6 +185,9 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
@@ -219,14 +225,6 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 8px 32px 0 rgba(0, 0, 0, 0.04);
-}
-
-.glass-header {
-  background-color: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: inset 0 -1px 0 0 var(--glass-highlight), 0 2px 12px 0 rgba(0, 0, 0, 0.03);
 }
 
 .glass-strong {

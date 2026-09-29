@@ -5,6 +5,38 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Direct brand palette tokens
+        paper: "#F5EEDB",
+        white: "#FFFFFF",
+        "sea-salt": "#F9F7F7",
+        saffron: {
+          DEFAULT: "#FFB347",
+          soft: "#FFCA7A",
+          strong: "#E09228"
+        },
+        "castleton-green": {
+          DEFAULT: "#046241",
+          light: "#088558",
+          dark: "#034830"
+        },
+        "dark-serpent": {
+          DEFAULT: "#133020",
+          light: "#1C4730",
+          dark: "#0D2116"
+        },
+        "earth-yellow": {
+          DEFAULT: "#E1A95F",
+          light: "#E9BE80",
+          dark: "#C88E44"
+        },
+        "jet-black": "#0A0A0A",
+        charcoal: "#1F1F1F",
+        slate: {
+          muted: "#64748B",
+          dark: "#334155",
+          light: "#94A3B8"
+        },
+
         // `<alpha-value>` format so `bg-bg/70` style modifiers work with CSS vars.
         bg: "rgb(var(--bg-rgb) / <alpha-value>)",
         surface: "rgb(var(--surface-rgb) / <alpha-value>)",
