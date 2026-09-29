@@ -202,6 +202,17 @@ export default function App() {
   useAccentTheme();
   useGlobalShortcuts(toggleMute, interrupt, sendText, settingsOpen || !onboarded);
 
+  // Prevent horizontal scroll jumps when offscreen elements mount/focus
+  useEffect(() => {
+    const lockHorizontalScroll = (): void => {
+      if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
+      if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0;
+      if (document.body.scrollLeft !== 0) document.body.scrollLeft = 0;
+    };
+    window.addEventListener("scroll", lockHorizontalScroll, { passive: true });
+    return () => window.removeEventListener("scroll", lockHorizontalScroll);
+  }, []);
+
   // Session boots after onboarding (mic gesture already granted).
   useEffect(() => {
     if (onboarded) void start();
@@ -302,14 +313,23 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="relative h-[100dvh] overflow-hidden bg-bg text-ink">
-      {/* Modern kitchen photo background */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/MODERN2-KITCHEN.jpg')" }}
-      >
-        {/* Soft overlay for visual depth and high contrast readability */}
-        <div className="absolute inset-0 bg-black/15 dark:bg-black/45 backdrop-blur-[0.5px]" />
+    <div
+      ref={(el) => {
+        if (el && el.scrollLeft !== 0) el.scrollLeft = 0;
+      }}
+      onScroll={(e) => {
+        if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
+      }}
+      className="relative h-[100dvh] w-full overflow-hidden overflow-x-hidden bg-bg text-ink"
+    >
+      {/* Modern kitchen photo background with jet black blur and clear visibility */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-black">
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105 filter blur-[5px] opacity-85 dark:opacity-75 transition-all duration-700"
+          style={{ backgroundImage: "url('/MODEN5-KITCHEN.jpg')" }}
+        />
+        {/* Subtle jet black tint to keep background clearly visible */}
+        <div className="absolute inset-0 bg-black/25 dark:bg-black/40 backdrop-blur-[0.5px]" />
       </div>
 
       {/* Frosted accent orbs — behind the full-bleed canvas. */}
@@ -318,8 +338,9 @@ export default function App() {
       {/* Full-screen 3D canvas layer — the model glides around open cards. */}
       {avatarLayer}
 
-      {/* Apple-style translucent header — logo and app name on left, settings button on right */}
-      <header className="fixed top-0 inset-x-0 z-40 flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6 glass-header">
+      {/* Frosted glass header matching Chat section and Planner Section */}
+      <header className="pointer-events-auto absolute left-4 right-4 top-4 z-40 flex h-12 sm:h-14 items-center justify-between px-4 sm:px-5 rounded-2xl glass shadow-warm">
+        {/* Leftmost: logo and name */}
         <div className="flex items-center gap-2.5 min-w-0">
           <ChefHat className="h-5 w-5 sm:h-6 sm:w-6 text-accent shrink-0" aria-hidden="true" />
           <span className="shrink-0 font-display text-18 sm:text-20 font-semibold tracking-tight text-ink">
@@ -330,13 +351,14 @@ export default function App() {
               <span aria-hidden="true" className="text-ink-muted/50 hidden sm:inline">
                 ·
               </span>
-              <span className="hidden sm:inline max-w-[20ch] md:max-w-[30ch] truncate text-13 sm:text-14 font-medium text-ink-muted">
+              <span className="hidden sm:inline max-w-[20ch] md:max-w-[32ch] truncate text-13 sm:text-14 font-medium text-ink-muted">
                 {recipe.title}
               </span>
             </>
           )}
         </div>
 
+        {/* Right: Controls & settings button */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           {phase === "cooking" && (
             <motion.button
@@ -369,7 +391,7 @@ export default function App() {
             aria-label={UI.settings}
             title={UI.settings}
             {...pressProps}
-            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border border-black/5 dark:border-white/10 bg-surface/50 text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <Settings2 className="h-4 w-4" />
           </motion.button>

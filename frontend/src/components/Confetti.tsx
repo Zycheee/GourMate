@@ -8,11 +8,13 @@
 import { useState, type CSSProperties } from "react";
 
 const COLORS = [
-  "rgb(var(--accent-rgb))",
-  "rgb(var(--accent-soft-rgb))",
-  "rgb(var(--tallow-rgb))",
-  "#F7F3EC",
-  "#FFFFFF"
+  "rgb(var(--accent-rgb))",      // Saffron accent
+  "rgb(var(--accent-soft-rgb))", // Soft saffron
+  "rgb(var(--tallow-rgb))",      // Earth yellow
+  "#046241",                     // Castleton Green
+  "#E1A95F",                     // Earth Yellow
+  "#F5EEDB",                     // Paper
+  "#FFFFFF"                      // White
 ];
 
 const PIECE_COUNT = 28;
