@@ -23,7 +23,7 @@ import StepRail from "./StepRail";
 import TimerRings from "./TimerRings";
 import { useSession } from "../store/session";
 import { useMediaQuery } from "../lib/useMediaQuery";
-import { pressProps, spring } from "../lib/motion";
+import { pressProps } from "../lib/motion";
 import { UI } from "../lib/copy";
 
 export default function InfoPanel({ onSendText }: { onSendText: (text: string) => void }) {
@@ -46,13 +46,21 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
   const bindExpand = useCallback((el: HTMLButtonElement | null) => {
     if (el && focusIntent.current === "expand") {
       focusIntent.current = null;
-      el.focus();
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
     }
   }, []);
   const bindMinimize = useCallback((el: HTMLButtonElement | null) => {
     if (el && focusIntent.current === "minimize") {
       focusIntent.current = null;
-      el.focus();
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
     }
   }, []);
 
@@ -172,10 +180,10 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
             id="info-panel"
             aria-label={railLabel}
             className="absolute right-4 top-1/2 z-20"
-            initial={{ opacity: 0, x: 16, scale: 0.85, y: "-50%" }}
+            initial={{ opacity: 0, x: 80, scale: 0.85, y: "-50%" }}
             animate={{ opacity: 1, x: 0, scale: 1, y: "-50%" }}
-            exit={{ opacity: 0, x: 12, scale: 0.85, y: "-50%" }}
-            transition={spring}
+            exit={{ opacity: 0, x: 80, scale: 0.85, y: "-50%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 28 }}
           >
             <motion.button
               type="button"
@@ -198,10 +206,10 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
             id="info-panel"
             aria-label={panelName}
             className="absolute right-4 top-20 bottom-4 z-20 flex w-[360px] xl:w-[400px] flex-col rounded-2xl glass"
-            initial={{ opacity: 0, x: 18 }}
+            initial={{ opacity: 0, x: 440 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 14 }}
-            transition={spring}
+            exit={{ opacity: 0, x: 440 }}
+            transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.85 }}
           >
             {/* Round minimize handle on the inner (left) edge — half on, half
                 off the card. */}

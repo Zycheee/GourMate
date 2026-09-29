@@ -70,13 +70,21 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
   const bindExpandChat = useCallback((el: HTMLButtonElement | null) => {
     if (el && focusIntent.current === "expand") {
       focusIntent.current = null;
-      el.focus();
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
     }
   }, []);
   const bindMinimizeChat = useCallback((el: HTMLButtonElement | null) => {
     if (el && focusIntent.current === "minimize") {
       focusIntent.current = null;
-      el.focus();
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
     }
   }, []);
 
@@ -174,7 +182,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
         className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-black/5 dark:hover:bg-white/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {copied ? (
-          <Check className="h-3.5 w-3.5 text-verdigris" />
+          <Check className="h-3.5 w-3.5 text-accent" />
         ) : (
           <Copy className="h-3.5 w-3.5" />
         )}
@@ -243,7 +251,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
         variants={bubbleVariants}
         onClick={() => onSendText(UI.plan.cookNowText)}
         {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
+        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface-2/90 dark:bg-surface-2/70 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
       >
         {UI.plan.cookNow}
       </motion.button>
@@ -361,7 +369,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
           }}
           placeholder={UI.composerPlaceholder}
           className={[
-            "w-full resize-none rounded-xl border border-black/10 dark:border-white/10 bg-surface/85 dark:bg-surface px-3.5 py-2",
+            "w-full resize-none rounded-xl border border-black/10 dark:border-white/10 bg-surface-2/60 dark:bg-surface-2/40 px-3.5 py-2",
             "text-13 sm:text-14 text-ink placeholder:text-ink-muted/60",
             "transition-colors duration-micro ease-ui shadow-sm",
             "focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/50"
@@ -407,7 +415,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
           <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-muted/75">
             {UI.chefName}
           </span>
-          <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface/90 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink shadow-sm">
+          <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink shadow-sm">
             {COPY.intakePrompt}
           </p>
         </motion.div>
@@ -448,7 +456,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
                     "mt-1 max-w-[85%] px-3.5 py-2 text-13 sm:text-14 leading-relaxed shadow-sm",
                     turn.role === "user"
                       ? "rounded-2xl rounded-tr-sm bg-accent-strong text-white"
-                      : "rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface/90 dark:bg-surface-2/90 text-ink"
+                      : "rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 text-ink"
                   ].join(" ")}
                 >
                   {turn.text}
@@ -470,7 +478,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
               <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-muted/75">
                 {UI.chefName}
               </span>
-              <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface/90 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink opacity-70 shadow-sm">
+              <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink opacity-70 shadow-sm">
                 {captionPending}
               </p>
             </motion.li>
@@ -491,10 +499,10 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
             id="chat-panel"
             aria-label={UI.chatTitle}
             className="absolute left-4 top-1/2 z-20"
-            initial={{ opacity: 0, x: -16, scale: 0.85, y: "-50%" }}
+            initial={{ opacity: 0, x: -80, scale: 0.85, y: "-50%" }}
             animate={{ opacity: 1, x: 0, scale: 1, y: "-50%" }}
-            exit={{ opacity: 0, x: -12, scale: 0.85, y: "-50%" }}
-            transition={spring}
+            exit={{ opacity: 0, x: -80, scale: 0.85, y: "-50%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 28 }}
           >
             <motion.button
               type="button"
@@ -526,10 +534,10 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
                     expanded ? "max-h-[75vh]" : ""
                   ].join(" ")
             }
-            initial={{ opacity: 0, x: -18 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -14 }}
-            transition={spring}
+            initial={{ opacity: 0, x: isDesktop ? -460 : 0, y: isDesktop ? 0 : "100%" }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: isDesktop ? -460 : 0, y: isDesktop ? 0 : "100%" }}
+            transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.85 }}
           >
             {/* Round minimize handle on the inner (right) edge — half on, half
                 off the card. */}
