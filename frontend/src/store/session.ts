@@ -129,8 +129,8 @@ export const useSession = create<SessionStore>()(
       toast: null,
       soundPrompt: false,
       pulsedTimerIds: [],
-      chatOpen: true,
-      infoOpen: true,
+      chatOpen: false,
+      infoOpen: false,
       focusMode: false,
       choices: null,
 
