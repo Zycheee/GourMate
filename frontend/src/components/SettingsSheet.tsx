@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Play, Trash2, X } from "lucide-react";
+import SquishSwitch from "./SquishSwitch";
 import { useSession } from "../store/session";
 import { previewVoice } from "../lib/api";
 import { clearCookbook } from "../lib/cookbook";
-import { pressProps, spring } from "../lib/motion";
+import { pressProps } from "../lib/motion";
 import { UI, VOICES } from "../lib/copy";
 import type { ThemePreference } from "../types";
 
@@ -52,45 +53,6 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </span>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
-  );
-}
-
-/**
- * Apple-style switch with tactile feedback and crisp proportions.
- */
-function Switch({
-  checked,
-  onToggle,
-  label
-}: {
-  checked: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onToggle}
-      {...pressProps}
-      className="flex h-8 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <span
-        className={[
-          "relative block h-6 w-11 rounded-full transition-colors duration-micro ease-ui shadow-inner",
-          checked ? "bg-accent" : "bg-steel/30 dark:bg-steel/40"
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-micro ease-ui",
-            checked ? "translate-x-5" : "translate-x-0"
-          ].join(" ")}
-        />
-      </span>
-    </motion.button>
   );
 }
 
@@ -167,33 +129,38 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   ];
 
   return (
-    <motion.div
-      role="dialog"
-      aria-modal="true"
-      aria-label={UI.settings}
-      aria-hidden={!open}
-      animate={{ opacity: open ? 1 : 0 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      className={[
-        "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6",
-        open ? "" : "pointer-events-none"
-      ].join(" ")}
-    >
-      <motion.div
-        className="absolute inset-0 bg-bg/70 backdrop-blur-md"
-        onClick={onClose}
-        animate={{ opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 14 }}
-        animate={{ opacity: open ? 1 : 0, scale: open ? 1 : 0.94, y: open ? 0 : 14 }}
-        transition={spring}
-        className={[
-          "relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col",
-          "rounded-2xl glass-strong shadow-warm-lg border border-black/10 dark:border-white/15 overflow-hidden"
-        ].join(" ")}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="settings-backdrop-container"
+          role="dialog"
+          aria-modal="true"
+          aria-label={UI.settings}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+        >
+          <motion.div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          />
+          <motion.div
+            key="settings-modal"
+            initial={{ opacity: 0, scale: 0.93, y: 32 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 24 }}
+            transition={{ type: "spring", stiffness: 360, damping: 28, mass: 0.85 }}
+            className={[
+              "relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col",
+              "rounded-2xl glass shadow-warm-lg overflow-hidden"
+            ].join(" ")}
+          >
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/10 px-5 py-3 sm:px-6">
           <h2 className="font-display text-16 sm:text-18 font-semibold text-ink">{UI.settings}</h2>
           <motion.button
@@ -261,10 +228,17 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
             </Row>
 
             <Row label={UI.timerSound}>
-              <Switch
+              <SquishSwitch
                 checked={settings.timerSound}
-                onToggle={() => setSettings({ timerSound: !settings.timerSound })}
-                label={UI.timerSound}
+                onChange={(checked) => setSettings({ timerSound: checked })}
+                ariaLabel={UI.timerSound}
+                width={50}
+                height={28}
+                radius={14}
+                trackColor="rgb(var(--steel-rgb) / 0.35)"
+                trackOnColor="var(--accent)"
+                thumbColor="#ffffff"
+                thumbOnColor="#ffffff"
               />
             </Row>
           </Section>
@@ -344,5 +318,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
         </div>
       </motion.div>
     </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
