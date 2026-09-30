@@ -93,8 +93,8 @@ const NEUTRAL: Pose = {
   leanX: 0,
   headY: 0,
   headRoll: 0,
-  bobAmp: 0.03,
-  bobSpeed: (Math.PI * 2) / 4,
+  bobAmp: 0.016,
+  bobSpeed: (Math.PI * 2) / 4.5,
   orbitAmp: 0,
   orbitSpeed: 0,
   shakeAmp: 0,
@@ -115,40 +115,40 @@ const POSES: Record<VoiceState, Pose> = {
   idle: { ...NEUTRAL },
   listening: {
     ...NEUTRAL,
-    leanX: -0.105,
-    headRoll: 0.08,
-    bobAmp: 0.04,
-    bobSpeed: (Math.PI * 2) / 2.4,
-    eyeScale: 1.12,
-    eyeRaise: 0.025,
-    keyIntensity: 1.3
+    leanX: -0.05,
+    headRoll: 0.04,
+    bobAmp: 0.018,
+    bobSpeed: (Math.PI * 2) / 3.0,
+    eyeScale: 1.08,
+    eyeRaise: 0.015,
+    keyIntensity: 1.2
   },
   submitting: {
     ...NEUTRAL,
-    leanX: 0.14,
+    leanX: 0.07,
     bobAmp: 0,
     bobSpeed: 0,
-    eyeScale: 0.9,
-    keyIntensity: 1.45
+    eyeScale: 0.95,
+    keyIntensity: 1.3
   },
   processing: {
     ...NEUTRAL,
-    bobAmp: 0.015,
-    bobSpeed: (Math.PI * 2) / 1.2,
-    orbitAmp: 1,
-    orbitSpeed: (Math.PI * 2) / 1.2,
-    eyeOffset: [-0.05, 0.06],
-    headRoll: 0.03,
+    bobAmp: 0.010,
+    bobSpeed: (Math.PI * 2) / 1.6,
+    orbitAmp: 0.35,
+    orbitSpeed: (Math.PI * 2) / 1.6,
+    eyeOffset: [0, 0],
+    headRoll: 0.015,
     keyIntensity: 1.15,
-    hatTilt: 0.1
+    hatTilt: 0.05
   },
   answering: {
     ...NEUTRAL,
-    bobAmp: 0.018,
-    bobSpeed: (Math.PI * 2) / 3.2,
+    bobAmp: 0.010,
+    bobSpeed: (Math.PI * 2) / 3.8,
     eyeScale: 0.98,
-    blush: 0.5,
-    keyIntensity: 1.27
+    blush: 0.4,
+    keyIntensity: 1.25
   },
   triage: {
     ...NEUTRAL,
@@ -169,8 +169,8 @@ const POSES: Record<VoiceState, Pose> = {
     eyeScale: 0.85,
     keyIntensity: 0.55,
     rimIntensity: 0.35,
-    desat: 0.85,
-    exclaim: 1
+    desat: 0,
+    exclaim: 0
   }
 };
 
@@ -257,6 +257,8 @@ const HAT_SEAT_Y = 0.4;
 /** Hover hysteresis: ignore brief out-events, then require a real absence before re-arming. */
 const HOVER_LEAVE_MS = 70;
 const HOVER_REARM_MS = 700;
+/** Sleep state inactivity threshold: 1 minute of user unresponsiveness */
+const SLEEP_IDLE_TIMEOUT_MS = 60_000;
 
 // Body (superellipsoid blob). Depth +~20% for a fuller side profile.
 const BODY_W = 0.98;
@@ -330,6 +332,13 @@ function AvatarFigure({
   const pose = POSES[voiceState] ?? NEUTRAL;
   const recipe = useSession((s) => s.recipe);
   const phase = useSession((s) => s.phase);
+  const currentStepIndex = useSession((s) => s.currentStepIndex);
+  const liveCaption = useSession((s) => s.liveCaption);
+
+  const doneExplainingRef = useRef(false);
+  const wasAnsweringRef = useRef(false);
+  const eyeShiftX = useRef(0);
+  const eyeShiftY = useRef(0);
 
   const rootRef = useRef<THREE.Group>(null);
   const rigRef = useRef<THREE.Group>(null);
@@ -339,9 +348,39 @@ function AvatarFigure({
   const pillRRef = useRef<THREE.Mesh>(null);
   const arcLRef = useRef<THREE.Mesh>(null);
   const arcRRef = useRef<THREE.Mesh>(null);
+  const sleepLRef = useRef<THREE.Mesh>(null);
+  const sleepRRef = useRef<THREE.Mesh>(null);
+  const mouthGroupRef = useRef<THREE.Group>(null);
+  const mouthSmileRef = useRef<THREE.Mesh>(null);
+  const mouthOpenRef = useRef<THREE.Mesh>(null);
+  const tongueRef = useRef<THREE.Mesh>(null);
+  const mouthOpenAmt = useRef(0);
+  const mouthSmileScale = useRef<[number, number]>([1, 1]);
+  const mouthRot = useRef(0);
+  const idleAnim = useRef({
+    timer: 0,
+    current: "normal" as "normal" | "whistle" | "taste" | "smirk" | "smile_perk" | "sigh",
+    progress: 0,
+    duration: 2.0,
+    nextAt: 4.0
+  });
+
+  // Contextual props
+  const clipboardGroupRef = useRef<THREE.Group>(null);
+  const pencilRef = useRef<THREE.Group>(null);
+  const notesAmt = useRef(0);
+
+  const panGroupRef = useRef<THREE.Group>(null);
+  const foodRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const cookAmt = useRef(0);
+
+  const zzzGroupRef = useRef<THREE.Group>(null);
+  const zzzRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const [sleeping, setSleeping] = useState(false);
+  const sleepAmt = useRef(0); // 0 = awake, 1 = fully asleep
+  const lastActiveRef = useRef(Date.now());
   const hatRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
-  const exclaimRef = useRef<THREE.Group>(null);
   const keyRef = useRef<THREE.PointLight>(null);
   const rimRef = useRef<THREE.DirectionalLight>(null);
   const [hovered, setHovered] = useState(false);
@@ -428,6 +467,335 @@ function AvatarFigure({
     [tier]
   );
 
+  // 3D "Z" geometry for the cartoon sleeping zzzzz
+  const zGeometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.045, 0.055);
+    shape.lineTo(0.045, 0.055);
+    shape.lineTo(0.045, 0.030);
+    shape.lineTo(-0.015, -0.030);
+    shape.lineTo(0.045, -0.030);
+    shape.lineTo(0.045, -0.055);
+    shape.lineTo(-0.045, -0.055);
+    shape.lineTo(-0.045, -0.030);
+    shape.lineTo(0.015, 0.030);
+    shape.lineTo(-0.045, 0.030);
+    shape.closePath();
+
+    return new THREE.ExtrudeGeometry(shape, {
+      depth: 0.014,
+      bevelEnabled: true,
+      bevelSegments: tier === "low" ? 1 : 2,
+      steps: 1,
+      bevelSize: 0.004,
+      bevelThickness: 0.004
+    });
+  }, [tier]);
+
+  const zMaterials = useMemo(
+    () =>
+      Array.from({ length: 4 }, () =>
+        new THREE.MeshPhysicalMaterial({
+          color: "#FFF5EA",
+          roughness: 0.25,
+          metalness: 0.05,
+          clearcoat: 0.8,
+          clearcoatRoughness: 0.2,
+          emissive: "#FFF0DB",
+          emissiveIntensity: 0.35,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false
+        })
+      ),
+    []
+  );
+
+  // Animated mouth geometries & materials
+  const mouthSmileGeometry = useMemo(() => {
+    // Torus arc for the smile curve
+    const arcAngle = Math.PI * 0.62;
+    const geom = new THREE.TorusGeometry(
+      0.044,
+      0.009,
+      tier === "low" ? 8 : 12,
+      tier === "low" ? 16 : 24,
+      arcAngle
+    );
+    // Center the arc at the bottom so it curves upwards into a warm smile ‿
+    geom.rotateZ(-Math.PI / 2 - arcAngle / 2);
+    // Center the geometry origin vertically on the smile center
+    geom.translate(0, 0.035, 0);
+    return geom;
+  }, [tier]);
+
+  const mouthOpenGeometry = useMemo(() => {
+    const geom = new THREE.CapsuleGeometry(0.018, 0.032, tier === "low" ? 6 : 10, tier === "low" ? 8 : 16);
+    geom.rotateZ(Math.PI / 2); // local X is width, local Y is height
+    return geom;
+  }, [tier]);
+
+  const mouthMaterial = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#241F1B",
+        roughness: 0.28,
+        metalness: 0,
+        clearcoat: 0.9,
+        clearcoatRoughness: 0.15
+      }),
+    []
+  );
+
+  const tongueGeometry = useMemo(() => new THREE.SphereGeometry(0.016, 8, 8), []);
+  const tongueMaterial = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#E26370",
+        roughness: 0.35,
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.2
+      }),
+    []
+  );
+
+  // Clipboard & pencil props (Planning / Thinking)
+  const boardGeometry = useMemo(() => new THREE.BoxGeometry(0.18, 0.24, 0.016), []);
+  const paperGeometry = useMemo(() => new THREE.BoxGeometry(0.15, 0.20, 0.005), []);
+  const clipGeometry = useMemo(() => new THREE.BoxGeometry(0.068, 0.024, 0.022), []);
+  const pencilGeometry = useMemo(() => new THREE.CylinderGeometry(0.007, 0.007, 0.13, 8), []);
+  const pencilTipGeometry = useMemo(() => new THREE.ConeGeometry(0.007, 0.020, 8), []);
+
+  const boardMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#7A4825", roughness: 0.5, depthTest: true, depthWrite: true }),
+    []
+  );
+  const paperMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#FDFCF8", roughness: 0.4, depthTest: true, depthWrite: true }),
+    []
+  );
+  const clipMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#D4AF37", metalness: 0.8, roughness: 0.25, depthTest: true, depthWrite: true }),
+    []
+  );
+  const pencilMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#F2B24C", roughness: 0.4, depthTest: true, depthWrite: true }),
+    []
+  );
+  const pencilTipMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#22201E", roughness: 0.5 }),
+    []
+  );
+
+  // Frying pan, wooden handle, mascot paws & food props (Cooking / Recipe steps)
+  const panOuterGeometry = useMemo(
+    () => new THREE.CylinderGeometry(0.18, 0.135, 0.048, tier === "low" ? 16 : 28),
+    [tier]
+  );
+  const panInnerGeometry = useMemo(
+    () => new THREE.CylinderGeometry(0.168, 0.128, 0.040, tier === "low" ? 16 : 28),
+    [tier]
+  );
+  const panRimGeometry = useMemo(
+    () => new THREE.TorusGeometry(0.176, 0.007, tier === "low" ? 6 : 10, tier === "low" ? 16 : 28),
+    [tier]
+  );
+  const panBracketGeometry = useMemo(() => new THREE.BoxGeometry(0.022, 0.032, 0.020), []);
+  const panHandleGeometry = useMemo(
+    () => new THREE.CylinderGeometry(0.013, 0.016, 0.22, tier === "low" ? 8 : 14),
+    [tier]
+  );
+  const panHandleTipGeometry = useMemo(() => new THREE.TorusGeometry(0.011, 0.0035, 6, 12), []);
+
+  // Mascot paws gripping and supporting the pan
+  const pawPalmGeometry = useMemo(
+    () => new THREE.SphereGeometry(0.038, tier === "low" ? 10 : 16, tier === "low" ? 8 : 12),
+    [tier]
+  );
+  const pawFingerGeometry = useMemo(
+    () => new THREE.CapsuleGeometry(0.009, 0.022, 6, 8),
+    []
+  );
+  const pawLeftGeometry = useMemo(
+    () => new THREE.SphereGeometry(0.034, tier === "low" ? 10 : 16, tier === "low" ? 8 : 12),
+    [tier]
+  );
+
+  const foodGeometries = useMemo(
+    () => [
+      new THREE.BoxGeometry(0.034, 0.026, 0.034), // golden sauteed potato/butter
+      new THREE.SphereGeometry(0.018, 8, 8), // fresh herb / pea
+      new THREE.CylinderGeometry(0.020, 0.020, 0.014, 10) // cherry tomato slice
+    ],
+    []
+  );
+
+  const panOuterMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#23201D", metalness: 0.75, roughness: 0.35 }),
+    []
+  );
+  const panInnerMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#161514", metalness: 0.55, roughness: 0.45 }),
+    []
+  );
+  const panRimMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#2C2927", metalness: 0.85, roughness: 0.25 }),
+    []
+  );
+  const panBracketMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#3A3734", metalness: 0.85, roughness: 0.25 }),
+    []
+  );
+  const panHandleMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#784421", roughness: 0.45 }),
+    []
+  );
+  const pawMaterial = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: baseColor,
+        roughness: 0.26,
+        metalness: 0,
+        clearcoat: 0.9,
+        clearcoatRoughness: 0.2,
+        sheen: 0.12,
+        sheenRoughness: 0.5,
+        sheenColor: "#FFF3DC",
+        emissive: baseColor,
+        emissiveIntensity: 0.05
+      }),
+    [baseColor]
+  );
+  const foodMaterials = useMemo(
+    () => [
+      new THREE.MeshStandardMaterial({ color: "#F5C542", roughness: 0.4 }), // golden potato/butter
+      new THREE.MeshStandardMaterial({ color: "#48A868", roughness: 0.4 }), // fresh herb/pea
+      new THREE.MeshStandardMaterial({ color: "#E24432", roughness: 0.4 }) // tomato/pepper
+    ],
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      zGeometry.dispose();
+      zMaterials.forEach((m) => m.dispose());
+      mouthSmileGeometry.dispose();
+      mouthOpenGeometry.dispose();
+      mouthMaterial.dispose();
+      tongueGeometry.dispose();
+      tongueMaterial.dispose();
+      boardGeometry.dispose();
+      paperGeometry.dispose();
+      clipGeometry.dispose();
+      pencilGeometry.dispose();
+      pencilTipGeometry.dispose();
+      boardMaterial.dispose();
+      paperMaterial.dispose();
+      clipMaterial.dispose();
+      pencilMaterial.dispose();
+      pencilTipMaterial.dispose();
+      panOuterGeometry.dispose();
+      panInnerGeometry.dispose();
+      panRimGeometry.dispose();
+      panBracketGeometry.dispose();
+      panHandleGeometry.dispose();
+      panHandleTipGeometry.dispose();
+      pawPalmGeometry.dispose();
+      pawFingerGeometry.dispose();
+      pawLeftGeometry.dispose();
+      foodGeometries.forEach((g) => g.dispose());
+      panOuterMaterial.dispose();
+      panInnerMaterial.dispose();
+      panRimMaterial.dispose();
+      panBracketMaterial.dispose();
+      panHandleMaterial.dispose();
+      pawMaterial.dispose();
+      foodMaterials.forEach((m) => m.dispose());
+    };
+  }, [
+    zGeometry,
+    zMaterials,
+    mouthSmileGeometry,
+    mouthOpenGeometry,
+    mouthMaterial,
+    tongueGeometry,
+    tongueMaterial,
+    boardGeometry,
+    paperGeometry,
+    clipGeometry,
+    pencilGeometry,
+    pencilTipGeometry,
+    boardMaterial,
+    paperMaterial,
+    clipMaterial,
+    pencilMaterial,
+    pencilTipMaterial,
+    panOuterGeometry,
+    panInnerGeometry,
+    panRimGeometry,
+    panBracketGeometry,
+    panHandleGeometry,
+    panHandleTipGeometry,
+    pawPalmGeometry,
+    pawFingerGeometry,
+    pawLeftGeometry,
+    foodGeometries,
+    panOuterMaterial,
+    panInnerMaterial,
+    panRimMaterial,
+    panBracketMaterial,
+    panHandleMaterial,
+    pawMaterial,
+    foodMaterials
+  ]);
+
+  // The avatar sleeps and floats zzz when idle, and wakes up exactly when active
+  const userSpeaking = useSession((s) => s.userSpeaking);
+  const isActive = voiceState !== "idle" || userSpeaking;
+  const idleTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isActive) {
+      if (idleTimerRef.current) {
+        window.clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      setSleeping(false);
+      lastActiveRef.current = Date.now();
+    } else {
+      // Settle to sleep after 1 minute of user unresponsiveness
+      if (idleTimerRef.current) {
+        window.clearTimeout(idleTimerRef.current);
+      }
+      idleTimerRef.current = window.setTimeout(() => {
+        setSleeping(true);
+      }, SLEEP_IDLE_TIMEOUT_MS);
+    }
+    return () => {
+      if (idleTimerRef.current) {
+        window.clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [isActive]);
+
+  // Reset doneExplaining whenever step changes or leaving cooking phase
+  useEffect(() => {
+    doneExplainingRef.current = false;
+    wasAnsweringRef.current = false;
+  }, [phase, currentStepIndex]);
+
+  // In cooking phase: track whether the avatar has completed its explanation of the step
+  useEffect(() => {
+    if (phase === "cooking") {
+      if (voiceState === "answering") {
+        wasAnsweringRef.current = true;
+        doneExplainingRef.current = false;
+      } else if (wasAnsweringRef.current) {
+        doneExplainingRef.current = true;
+      }
+    }
+  }, [phase, voiceState]);
+
   // --- eye expression sequence: close → ^ ^ (hold ~2 s) → reopen ---
   const eyeSeq = useRef<{ phase: EyePhase; t: number }>({ phase: "idle", t: 0 });
   const eyeAmt = useRef({ close: 0, happy: 0 });
@@ -446,10 +814,21 @@ function AvatarFigure({
     const onMove = (e: PointerEvent): void => {
       pointerRef.current.x = (e.clientX / window.innerWidth) * 2 - 1;
       pointerRef.current.y = -((e.clientY / window.innerHeight) * 2 - 1);
+      lastActiveRef.current = Date.now();
+
+      // Reset the 1-minute inactivity timer on cursor movement if currently awake
+      if (!sleeping && !isActive) {
+        if (idleTimerRef.current) {
+          window.clearTimeout(idleTimerRef.current);
+        }
+        idleTimerRef.current = window.setTimeout(() => {
+          setSleeping(true);
+        }, SLEEP_IDLE_TIMEOUT_MS);
+      }
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
-  }, []);
+  }, [sleeping, isActive]);
 
   const cur = useRef({
     leanX: 0,
@@ -557,9 +936,43 @@ function AvatarFigure({
 
   const onReact = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
+    lastActiveRef.current = Date.now();
+    if (sleeping) {
+      setSleeping(false);
+      if (idleTimerRef.current) {
+        window.clearTimeout(idleTimerRef.current);
+      }
+      idleTimerRef.current = window.setTimeout(() => {
+        setSleeping(true);
+      }, SLEEP_IDLE_TIMEOUT_MS);
+      timers.current.hatKick = 0.8;
+      if (!reduced) {
+        void interactApi.start({
+          scale: 1.1,
+          config: BOUNCE,
+          onRest: () => {
+            void interactApi.start({
+              scale: hover.current.over ? HOVER_SCALE : 1,
+              config: BOUNCE
+            });
+          }
+        });
+      }
+      return;
+    }
+    // Reset inactivity sleep timer on interaction
+    if (idleTimerRef.current) {
+      window.clearTimeout(idleTimerRef.current);
+    }
+    idleTimerRef.current = window.setTimeout(() => {
+      setSleeping(true);
+    }, SLEEP_IDLE_TIMEOUT_MS);
     // Play `^ ^` once per click session — never restart mid-sequence (spam
     // clicking used to force `closing` every frame, hiding the eyes entirely).
     if (eyeSeq.current.phase === "idle") triggerEyes();
+    idleAnim.current.current = "smile_perk";
+    idleAnim.current.duration = 1.2;
+    idleAnim.current.progress = 0;
     timers.current.hatKick = 1;
     // Full overshoot turn about the model's own vertical axis.
     startSpin();
@@ -644,8 +1057,8 @@ function AvatarFigure({
     if (!reduced) void interactApi.start({ scale: HOVER_SCALE, config: SPIN });
     // squish is spammable — every genuine re-entry re-squishes
     timers.current.squish = 0;
-    // `^ ^` is not — only after the cooldown and when no sequence is running
-    if (hover.current.armed && eyeSeq.current.phase === "idle") {
+    // `^ ^` is not — only after the cooldown, when awake, and when no sequence is running
+    if (!sleeping && hover.current.armed && eyeSeq.current.phase === "idle") {
       hover.current.armed = false;
       triggerEyes();
     }
@@ -701,15 +1114,29 @@ function AvatarFigure({
     }
     tm.hatKick = Math.max(0, tm.hatKick - dt * 2.4);
 
-    // ---- ambient loops
-    const breath = ambient ? Math.sin(t * Math.PI * 2 * 0.22) * 0.014 : 0;
-    const bob = ambient ? Math.sin(t * pose.bobSpeed + tm.bob) * pose.bobAmp : 0;
+    // ---- sleeping damp (1 = asleep, 0 = awake)
+    const targetSleep = sleeping ? 1 : 0;
+    sleepAmt.current = THREE.MathUtils.damp(
+      sleepAmt.current,
+      targetSleep,
+      sleeping ? 3 : 5.5,
+      dt
+    );
+    const sAmt = sleepAmt.current;
+
+    // ---- ambient loops (subtle, calm idle aliveness)
+    const sleepBreath = ambient ? Math.sin(t * 1.4) * 0.015 * sAmt : 0;
+    const sleepBob = ambient ? Math.sin(t * 1.4) * 0.010 * sAmt : 0;
+    const breath =
+      (ambient ? Math.sin(t * Math.PI * 2 * 0.22) * 0.008 : 0) * (1 - sAmt) + sleepBreath;
+    const bob =
+      (ambient ? Math.sin(t * pose.bobSpeed + tm.bob) * pose.bobAmp : 0) * (1 - sAmt) + sleepBob;
 
     let orbitX = 0;
     let orbitZ = 0;
     if (ambient && pose.orbitAmp > 0) {
-      orbitX = Math.sin(t * pose.orbitSpeed) * 0.06 * pose.orbitAmp;
-      orbitZ = Math.cos(t * pose.orbitSpeed) * 0.03 * pose.orbitAmp;
+      orbitX = Math.sin(t * pose.orbitSpeed) * 0.03 * pose.orbitAmp;
+      orbitZ = Math.cos(t * pose.orbitSpeed) * 0.015 * pose.orbitAmp;
     }
 
     let shakeY = 0;
@@ -717,34 +1144,34 @@ function AvatarFigure({
       shakeY = Math.sin(t * pose.shakeSpeed) * pose.shakeAmp;
     }
 
-    // ---- speech (A1 talk-bob + A2 rock; hat springs per phrase)
+    // ---- speech gestures (natural, subtle nod + gentle syllable rhythm)
     const mouthLevel = getMouthLevel();
     if (voiceState === "answering" && mouthLevel > 0.22 && ambient) {
-      tm.nod = Math.min(1, tm.nod + dt * 4);
+      tm.nod = Math.min(1, tm.nod + dt * 3.5);
     } else {
       tm.nod = Math.max(0, tm.nod - dt * 2.5);
     }
-    const nodX = Math.sin(tm.nod * Math.PI) * 0.07;
-    const answering = voiceState === "answering" && ambient;
-    const talkBob = answering ? mouthLevel * 0.03 : 0;
-    const rock = answering ? Math.sin(t * 3.2) * mouthLevel * 0.06 : 0;
-    if (answering && mouthLevel > 0.42) tm.hatKick = Math.max(tm.hatKick, 0.35);
+    const nodX = Math.sin(tm.nod * Math.PI) * 0.024;
+    const answering = (voiceState === "answering" || mouthLevel > 0.01) && ambient;
+    const talkBob = answering ? mouthLevel * 0.010 : 0;
+    const rock = answering ? Math.sin(t * 2.2) * mouthLevel * 0.018 : 0;
+    if (answering && mouthLevel > 0.45) tm.hatKick = Math.max(tm.hatKick, 0.12);
 
-    // ---- listening (L2 ripples use micLevel, L3 nod-along uses mic peaks)
+    // ---- listening (L2 ripples use micLevel, L3 gentle nod-along uses mic peaks)
     const listening = voiceState === "listening" && ambient;
     const micLevel = listening ? getMicLevel() : 0;
     let micNod = 0;
     if (listening) {
       if (getMicPeak() > 0.25 && tm.nodMic < 0.25) tm.nodMic = 1;
       tm.nodMic = Math.max(0, tm.nodMic - dt * 3.2);
-      micNod = Math.sin(tm.nodMic * Math.PI) * 0.035;
+      micNod = Math.sin(tm.nodMic * Math.PI) * 0.016;
     }
 
-    // ---- processing (P2 stir + P3 heartbeat)
+    // ---- processing (gentle stir + heartbeat)
     const processing = voiceState === "processing" && ambient;
-    const stirX = processing ? Math.cos(t * 1.1) * 0.05 : 0;
-    const stirY = processing ? Math.sin(t * 0.7) * 0.16 : 0;
-    const stirZ = processing ? Math.sin(t * 1.1) * 0.06 : 0;
+    const stirX = processing ? Math.cos(t * 1.1) * 0.02 : 0;
+    const stirY = processing ? Math.sin(t * 0.7) * 0.07 : 0;
+    const stirZ = processing ? Math.sin(t * 1.1) * 0.02 : 0;
     let heartbeat = 0;
     if (processing) {
       const hb = (t % 1.2) / 1.2;
@@ -752,18 +1179,23 @@ function AvatarFigure({
         Math.exp(-Math.pow(hb * 14, 2)) + 0.55 * Math.exp(-Math.pow((hb - 0.16) * 14, 2));
     }
 
-    // ---- pointer tracking (whole body follows the cursor, moderate)
+    // ---- pointer tracking (whole body follows the cursor)
     const px = pointerRef.current.x;
     const py = pointerRef.current.y;
+    const isCookingAction = phase === "cooking" && !sleeping;
+
     const tLookX = ambient ? px * 0.35 : 0;
     const tLookY = ambient ? -py * 0.18 : 0;
-    lookX.current = damp(lookX.current, tLookX, 3, dt);
-    lookY.current = damp(lookY.current, tLookY, 3, dt);
+    lookX.current = damp(lookX.current, tLookX, 3.5, dt);
+    lookY.current = damp(lookY.current, tLookY, 3.5, dt);
+
+    const sleepRoll = 0.08 * sAmt;
+    const sleepLean = 0.04 * sAmt;
 
     if (rigRef.current) {
-      rigRef.current.rotation.x = c.leanX + nodX + micNod + stirX + lookY.current;
+      rigRef.current.rotation.x = c.leanX + nodX + micNod + stirX + lookY.current + sleepLean;
       rigRef.current.rotation.y = shakeY + stirY + lookX.current;
-      rigRef.current.rotation.z = c.headRoll + rock + stirZ;
+      rigRef.current.rotation.z = c.headRoll + rock + stirZ + sleepRoll;
       rigRef.current.position.set(orbitX, bob + c.headY + breath + talkBob, orbitZ);
     }
     if (headRef.current) {
@@ -774,9 +1206,9 @@ function AvatarFigure({
       );
     }
 
-    // ---- blink (only between expression sequences, so it cannot double up)
+    // ---- blink (only between expression sequences, suppressed while sleeping)
     tm.blinkAt -= dt;
-    if (tm.blinkAt <= 0 && eyeSeq.current.phase === "idle") {
+    if (tm.blinkAt <= 0 && eyeSeq.current.phase === "idle" && sAmt < 0.2) {
       tm.blink = 1;
       tm.blinkAt = voiceState === "idle" ? 3 + Math.random() * 3 : 4 + Math.random() * 3;
     }
@@ -812,28 +1244,338 @@ function AvatarFigure({
     const closeAmt = eyeAmt.current.close;
     const happyAmt = eyeAmt.current.happy;
 
-    const lookShiftX = ambient ? px * 0.012 : 0;
-    const lookShiftY = ambient ? py * 0.008 : 0;
+    eyeShiftX.current = damp(eyeShiftX.current, ambient ? px * 0.014 : 0, 6, dt);
+    eyeShiftY.current = damp(eyeShiftY.current, ambient ? py * 0.009 : 0, 6, dt);
     const eyeY = c.eyeY + c.eyeRaise;
-    const eyeCx = c.eyeX + lookShiftX;
-    const eyeCy = EYE_Y + eyeY + lookShiftY;
+    const eyeCx = c.eyeX + eyeShiftX.current;
+    const eyeCy = EYE_Y + eyeY + eyeShiftY.current;
     if (eyesRef.current) eyesRef.current.scale.set(c.eyeScale + micLevel * 0.12, blinkSquash, 1);
 
-    for (const [pill, arc, sign] of [
-      [pillLRef.current, arcLRef.current, -1],
-      [pillRRef.current, arcRRef.current, 1]
+    const awakeScale = Math.max(0, 1 - closeAmt) * Math.max(0, 1 - sAmt) * blinkSquash;
+    const sleepEyeScale = Math.max(0, sAmt * (1 - happyAmt));
+
+    for (const [pill, arc, sleepArc, sign] of [
+      [pillLRef.current, arcLRef.current, sleepLRef.current, -1],
+      [pillRRef.current, arcRRef.current, sleepRRef.current, 1]
     ] as const) {
       const x = sign * EYE_SPACING + eyeCx;
-      const pillScaleY = Math.max(0, 1 - closeAmt) * blinkSquash;
+
+      // 1. Awake Pill Eyes
       if (pill) {
         pill.position.set(x, eyeCy, 0);
-        pill.scale.set(1, pillScaleY, 1);
-        pill.visible = pillScaleY > 0.03;
+        pill.scale.set(1, awakeScale, 1);
+        pill.visible = awakeScale > 0.03;
       }
+
+      // 2. Happy ^ ^ Eyes (during celebration / click / hover)
       if (arc) {
         arc.position.set(x, eyeCy - ARC_RADIUS / 2, 0);
         arc.scale.setScalar(Math.max(0.001, happyAmt));
         arc.visible = happyAmt > 0.03;
+      }
+
+      // 3. Sleeping Closed Eyes ︶ ︶
+      if (sleepArc) {
+        const sleepBreathe = 1 + Math.sin(t * 1.4) * 0.025;
+        sleepArc.position.set(x, eyeCy + ARC_RADIUS / 2, 0);
+        sleepArc.scale.set(sleepEyeScale, sleepEyeScale * sleepBreathe, sleepEyeScale);
+        sleepArc.rotation.z = Math.PI;
+        sleepArc.visible = sleepEyeScale > 0.03;
+      }
+    }
+
+    // ---- Mouth Animation System (Contextual Idle + Real Audio Lip-Sync)
+    const audioLevel = getMouthLevel();
+    const hasAudio = audioLevel > 0.008;
+    const isSpeaking =
+      hasAudio ||
+      voiceState === "answering" ||
+      (Boolean(liveCaption && liveCaption.trim().length > 0) && voiceState !== "idle");
+
+    // Real-time audio synchronization:
+    // When real AI voice audio is playing, drive mouth opening directly by audio amplitude.
+    // Syllables scale mouthOpen between 0.15 and 1.0; pauses between words close mouth.
+    let speechMouthOpen = 0;
+    if (hasAudio) {
+      speechMouthOpen = Math.min(1.0, audioLevel * 2.2);
+    } else if (isSpeaking && !sleeping) {
+      // Fallback cadence only when audio stream is unavailable
+      speechMouthOpen = Math.abs(Math.sin(t * 14)) * 0.40 + Math.abs(Math.sin(t * 22)) * 0.25;
+    }
+    const rawSpeechOpen = isSpeaking ? speechMouthOpen : 0;
+
+    // Advance contextual idle animation timers
+    const ia = idleAnim.current;
+    if (voiceState === "idle" && !isSpeaking) {
+      ia.timer += dt;
+      if (ia.current === "normal") {
+        if (ia.timer >= ia.nextAt) {
+          ia.timer = 0;
+          ia.progress = 0;
+          if (sleeping) {
+            // Sleeping idle: occasional soft sleepy breath / sigh
+            ia.current = "sigh";
+            ia.duration = 2.4;
+            ia.nextAt = 7.0 + Math.random() * 4.0;
+          } else if (phase === "cooking") {
+            // Cooking idle: chef taste-testing! "nom nom"
+            ia.current = "taste";
+            ia.duration = 1.8;
+            ia.nextAt = 4.5 + Math.random() * 3.0;
+          } else if (phase === "planning") {
+            // Planning idle: thoughtful smirk / lip purse
+            ia.current = "smirk";
+            ia.duration = 2.2;
+            ia.nextAt = 4.0 + Math.random() * 3.0;
+          } else if (phase === "done") {
+            // Done celebration: joyful perk
+            ia.current = "smile_perk";
+            ia.duration = 1.6;
+            ia.nextAt = 3.0 + Math.random() * 2.0;
+          } else {
+            // Intake / generic idle: alternate between whistle and smile perk
+            ia.current = Math.random() > 0.45 ? "whistle" : "smile_perk";
+            ia.duration = ia.current === "whistle" ? 2.2 : 1.5;
+            ia.nextAt = 4.5 + Math.random() * 3.5;
+          }
+        }
+      } else {
+        ia.progress += dt / ia.duration;
+        if (ia.progress >= 1) {
+          ia.current = "normal";
+          ia.progress = 0;
+          ia.timer = 0;
+        }
+      }
+    } else {
+      ia.current = "normal";
+      ia.progress = 0;
+      ia.timer = 0;
+    }
+
+    // Baseline targets according to idle state / voice state
+    let targetMouthOpen = isSpeaking && !sleeping ? rawSpeechOpen : 0;
+    let targetSmileScaleX = 1.0;
+    let targetSmileScaleY = 1.0;
+    let targetSmileRotZ = 0;
+    let mouthShiftX = 0;
+    let mouthShiftY = 0;
+
+    if (sleeping) {
+      // 1. Sleeping Idle: Soft relaxed mouth, gentle breathing in sync with sleep
+      const sBreath = Math.sin(t * 1.4);
+      targetSmileScaleX = 0.72 + sBreath * 0.04;
+      targetSmileScaleY = 0.50 + sBreath * 0.06;
+      if (ia.current === "sigh") {
+        const p = Math.sin(ia.progress * Math.PI);
+        targetMouthOpen = p * 0.35;
+        targetSmileScaleX = 0.65;
+        targetSmileScaleY = 0.4;
+      }
+    } else if (voiceState === "idle") {
+      // 2. Awake Idle
+      if (phase === "cooking") {
+        // Cooking Idle: Chef tasting "nom nom"
+        targetSmileScaleX = 1.1;
+        targetSmileScaleY = 1.1;
+        if (ia.current === "taste") {
+          const bite = Math.max(0, Math.sin(ia.progress * Math.PI * 4));
+          targetMouthOpen = bite * 0.55;
+          targetSmileScaleX = 1.0 + bite * 0.2;
+        }
+      } else if (phase === "planning") {
+        // Planning Idle: Thoughtful smirk / lip purse
+        targetSmileScaleX = 0.92;
+        targetSmileScaleY = 0.88;
+        targetSmileRotZ = -0.06;
+        if (ia.current === "smirk") {
+          const p = Math.sin(ia.progress * Math.PI);
+          mouthShiftX = 0.012 * p;
+          targetSmileRotZ = -0.16 * p;
+          targetSmileScaleX = 0.85;
+          targetSmileScaleY = 0.75 + p * 0.3;
+        }
+      } else if (phase === "done") {
+        // Done Idle: Celebration beaming grin
+        targetSmileScaleX = 1.25;
+        targetSmileScaleY = 1.2;
+        if (ia.current === "smile_perk") {
+          const p = Math.sin(ia.progress * Math.PI);
+          targetSmileScaleX = 1.35 + p * 0.15;
+          targetSmileScaleY = 1.3 + p * 0.2;
+          targetMouthOpen = p * 0.35;
+        }
+      } else {
+        // Intake / Default Idle: Friendly smile with periodic whistle or smile perk
+        const breath = Math.sin(t * 2.2) * 0.03;
+        targetSmileScaleX = 1.0 + breath;
+        targetSmileScaleY = 1.0 + breath * 0.5;
+        if (ia.current === "whistle") {
+          const p = Math.sin(ia.progress * Math.PI);
+          const tuneWobble = Math.sin(t * 14) * 0.08 * p;
+          targetMouthOpen = (0.55 + tuneWobble) * p;
+          targetSmileScaleX = 1.0 - 0.5 * p;
+          targetSmileScaleY = 1.0 - 0.4 * p;
+        } else if (ia.current === "smile_perk") {
+          const p = Math.sin(ia.progress * Math.PI);
+          targetSmileScaleX = 1.0 + 0.25 * p;
+          targetSmileScaleY = 1.0 + 0.3 * p;
+        }
+      }
+    } else if (voiceState === "listening") {
+      targetMouthOpen = 0.14 + (ambient ? Math.sin(t * 3.5) * 0.04 : 0);
+      targetSmileScaleX = 1.05;
+      targetSmileScaleY = 0.95;
+    } else if (voiceState === "processing") {
+      const procPulse = Math.sin(t * 7.0) * 0.06;
+      targetSmileScaleX = 0.90 + procPulse;
+      targetSmileScaleY = 0.85 + procPulse * 0.5;
+      targetSmileRotZ = 0.08;
+    } else if (voiceState === "triage") {
+      targetMouthOpen = 0.45;
+      targetSmileScaleX = 0.85;
+      targetSmileScaleY = 0.8;
+    } else if (voiceState === "error") {
+      targetSmileScaleX = 0.9;
+      targetSmileScaleY = -0.5;
+    }
+
+    // Smooth dampening — faster tracking during speech for crisp lip-sync
+    mouthOpenAmt.current = damp(mouthOpenAmt.current, targetMouthOpen, isSpeaking ? 30 : 16, dt);
+    const mOpen = mouthOpenAmt.current;
+
+    mouthSmileScale.current[0] = damp(mouthSmileScale.current[0], targetSmileScaleX, 12, dt);
+    mouthSmileScale.current[1] = damp(mouthSmileScale.current[1], targetSmileScaleY, 12, dt);
+    mouthRot.current = damp(mouthRot.current, targetSmileRotZ, 10, dt);
+
+    const mY = EYE_Y - 0.125 + eyeY - mOpen * 0.008 + mouthShiftY;
+    const mX = eyeCx + mouthShiftX;
+
+    if (mouthGroupRef.current) {
+      mouthGroupRef.current.position.set(mX, mY, FACE_Z);
+      mouthGroupRef.current.rotation.z = mouthRot.current;
+    }
+
+    // Update Smile Arc mesh (visible when mouth is closed or quiet)
+    if (mouthSmileRef.current) {
+      const sScaleX = mouthSmileScale.current[0];
+      const sScaleY = mouthSmileScale.current[1];
+      mouthSmileRef.current.scale.set(sScaleX, sScaleY, 1);
+      mouthSmileRef.current.visible = mOpen < 0.06;
+    }
+
+    // Update Open Mouth mesh (scales dynamically with voice amplitude)
+    if (mouthOpenRef.current) {
+      if (mOpen >= 0.06) {
+        mouthOpenRef.current.visible = true;
+        const isWhistle = ia.current === "whistle" && !isSpeaking;
+        const openW = isWhistle ? 0.55 * mOpen : 0.82 + mOpen * 0.45;
+        const openH = isWhistle ? 0.65 * mOpen : 0.25 + mOpen * 1.50;
+        mouthOpenRef.current.scale.set(openW, openH, 1);
+      } else {
+        mouthOpenRef.current.visible = false;
+      }
+    }
+
+    // ---- Contextual Action 1: Planning / Thinking Clipboard & Mascot Hands
+    // Reversed orientation: back of board faces camera/user, paper on inner face (-Z)
+    const isPlanning = (phase === "planning" || voiceState === "processing") && !sleeping;
+    notesAmt.current = damp(notesAmt.current, isPlanning ? 1 : 0, 8, dt);
+    const nAmt = notesAmt.current;
+
+    if (clipboardGroupRef.current) {
+      clipboardGroupRef.current.visible = nAmt > 0.01;
+      if (nAmt > 0.01) {
+        clipboardGroupRef.current.scale.setScalar(nAmt);
+        const floatBob = ambient ? Math.sin(t * 1.8) * 0.008 : 0;
+        clipboardGroupRef.current.position.set(0.23, -0.18 + floatBob, FACE_Z + 0.13);
+        // Tilted strongly downward (0.68 rad / ~39 deg forward pitch) with 3/4 angle for clear 3D perspective
+        clipboardGroupRef.current.rotation.set(0.68, 0.42, -0.15);
+
+        if (pencilRef.current) {
+          // Pencil and mascot right writing hand scribble on the inner paper (-Z)
+          const scribbleX = Math.sin(t * 16) * 0.014;
+          const scribbleY = Math.cos(t * 8) * 0.008;
+          pencilRef.current.position.set(-0.045 + scribbleX, 0.01 + scribbleY, -0.024);
+          pencilRef.current.rotation.set(0.20, 0.16, Math.sin(t * 16) * 0.14);
+        }
+      }
+    }
+
+    // ---- Contextual Action 2: Cooking Steps Frying Pan & Tossing Food
+    // Active during cooking phase idle and speech, held naturally in front of the avatar
+    cookAmt.current = damp(cookAmt.current, isCookingAction && !isPlanning ? 1 : 0, 8, dt);
+    const cAmt = cookAmt.current;
+
+    if (panGroupRef.current) {
+      panGroupRef.current.visible = cAmt > 0.01;
+      if (cAmt > 0.01) {
+        panGroupRef.current.scale.setScalar(cAmt);
+        // Calm cooking cycle: gentle simmer sizzle with occasional smooth, subtle chef toss
+        const cookCycle = (t * 1.3) % (Math.PI * 2);
+        const flipTrigger = Math.sin(cookCycle);
+        const isFlipping = flipTrigger > 0.72;
+        const flipP = isFlipping ? (flipTrigger - 0.72) / 0.28 : 0;
+
+        // Subtle simmer sizzle at rest, smooth gentle dip and tilt during toss
+        const simmerSway = ambient ? Math.sin(t * 3.5) * 0.003 : 0;
+        const panDip = isFlipping ? Math.sin(flipP * Math.PI) * -0.016 : simmerSway;
+        const panTilt = isFlipping ? Math.sin(flipP * Math.PI) * 0.09 : simmerSway * 1.5;
+
+        // Held in front of the body with a comfortable forward tilt to see the food
+        panGroupRef.current.position.set(-0.06, -0.22 + panDip, FACE_Z + 0.12);
+        panGroupRef.current.rotation.set(0.32 + panTilt, -0.20, 0.04);
+
+        // Gentle food tossing inside pan
+        const jumpY = isFlipping ? Math.sin(flipP * Math.PI) * 0.055 : 0;
+        const initialFoodOffsets: [number, number, number][] = [
+          [-0.042, 0.014, 0.012],
+          [0.018, 0.016, -0.026],
+          [0.046, 0.014, 0.018]
+        ];
+        foodRefs.current.forEach((foodMesh, idx) => {
+          if (!foodMesh) return;
+          const [bx, by, bz] = initialFoodOffsets[idx] || [0, 0.014, 0];
+          const jumpBonus = 1 + idx * 0.15;
+          const jiggle = ambient && !isFlipping ? Math.sin(t * 6 + idx * 1.8) * 0.002 : 0;
+          foodMesh.position.set(bx, by + jumpY * jumpBonus + jiggle, bz);
+          foodMesh.rotation.x += dt * (isFlipping ? 2.5 + idx * 0.8 : 0.4);
+          foodMesh.rotation.y += dt * (isFlipping ? 3.0 + idx * 0.8 : 0.5);
+        });
+      }
+    }
+
+    // ---- Zzzzz animation floating on the right side of the head
+    if (zzzGroupRef.current) {
+      const showZ = sAmt > 0.02;
+      zzzGroupRef.current.visible = showZ;
+      if (showZ) {
+        const COUNT = 4;
+        const speed = 0.42; // gentle, dreamy drift
+        zzzRefs.current.forEach((zMesh, i) => {
+          if (!zMesh) return;
+          const progress = (t * speed + i / COUNT) % 1;
+          const driftX = progress * 0.22 + Math.sin(progress * Math.PI * 2 + i) * 0.03;
+          const driftY = progress * 0.44;
+          const driftZ = progress * 0.03;
+
+          const baseScale = 0.55 + progress * 0.65;
+          zMesh.scale.setScalar(baseScale * sAmt);
+          zMesh.position.set(driftX, driftY, driftZ);
+          zMesh.rotation.z = Math.sin(progress * Math.PI * 2 + i * 0.8) * 0.18 + 0.08;
+          zMesh.rotation.y = Math.sin(progress * 3 + i) * 0.12;
+
+          let alpha = 1;
+          if (progress < 0.2) {
+            alpha = progress / 0.2;
+          } else if (progress > 0.65) {
+            alpha = (1 - progress) / 0.35;
+          }
+          const mat = zMaterials[i];
+          if (mat) {
+            mat.opacity = Math.max(0, Math.min(1, alpha * 0.92 * sAmt));
+          }
+        });
       }
     }
 
@@ -931,12 +1673,6 @@ function AvatarFigure({
       }
     }
 
-    // ---- error "!"
-    if (exclaimRef.current) {
-      exclaimRef.current.visible = c.exclaim > 0.02;
-      exclaimRef.current.scale.setScalar(0.55 + c.exclaim * 0.45);
-    }
-
     // ---- lights
     if (keyRef.current) keyRef.current.intensity = c.key * 5.2;
     if (rimRef.current) {
@@ -950,8 +1686,11 @@ function AvatarFigure({
       bodyMat.current.color.copy(bodyColor);
       bodyMat.current.emissive.copy(bodyColor);
     }
+    pawMaterial.color.copy(bodyColor);
+    pawMaterial.emissive.copy(bodyColor);
     const eyeColor = EYE.clone().lerp(EYE_GREY, c.desat);
     eyeMaterial.color.copy(eyeColor);
+    mouthMaterial.color.copy(eyeColor);
     hatWhiteMaterial.color.copy(HAT).lerp(BASE_GREY, c.desat);
     hatWhiteMaterial.emissive.copy(hatWhiteMaterial.color);
     hatAccentMaterial.color.copy(VERDIGRIS).lerp(BASE_GREY, c.desat);
@@ -997,12 +1736,28 @@ function AvatarFigure({
             />
           </mesh>
 
-          {/* eyes: pill ↔ thick ^ arc */}
+          {/* eyes: pill ↔ thick ^ arc ↔ sleeping closed arc ︶ */}
           <group ref={eyesRef} position={[0, 0, FACE_Z]}>
             <mesh ref={pillLRef} geometry={pillGeometry} material={eyeMaterial} position={[-EYE_SPACING, EYE_Y, 0]} />
             <mesh ref={pillRRef} geometry={pillGeometry} material={eyeMaterial} position={[EYE_SPACING, EYE_Y, 0]} />
             <mesh ref={arcLRef} geometry={arcGeometry} material={eyeMaterial} position={[-EYE_SPACING, EYE_Y, 0]} visible={false} />
             <mesh ref={arcRRef} geometry={arcGeometry} material={eyeMaterial} position={[EYE_SPACING, EYE_Y, 0]} visible={false} />
+            <mesh ref={sleepLRef} geometry={arcGeometry} material={eyeMaterial} position={[-EYE_SPACING, EYE_Y, 0]} rotation={[0, 0, Math.PI]} visible={false} />
+            <mesh ref={sleepRRef} geometry={arcGeometry} material={eyeMaterial} position={[EYE_SPACING, EYE_Y, 0]} rotation={[0, 0, Math.PI]} visible={false} />
+          </group>
+
+          {/* Floating Zzzzz on the right side of the head */}
+          <group ref={zzzGroupRef} position={[0.34, 0.26, FACE_Z + 0.01]} visible={false}>
+            {[0, 1, 2, 3].map((i) => (
+              <mesh
+                key={i}
+                ref={(el) => {
+                  zzzRefs.current[i] = el;
+                }}
+                geometry={zGeometry}
+                material={zMaterials[i]}
+              />
+            ))}
           </group>
 
           {/* blush cheeks */}
@@ -1013,16 +1768,110 @@ function AvatarFigure({
             <sphereGeometry args={[1, tier === "low" ? 10 : 20, tier === "low" ? 10 : 20]} />
           </mesh>
 
-          {/* error "!" */}
-          <group ref={exclaimRef} position={[0, 0, FACE_Z + 0.02]} visible={false}>
-            <mesh position={[0, 0.08, 0]}>
-              <boxGeometry args={[0.07, 0.22, 0.03]} />
-              <meshStandardMaterial color="#2A211B" roughness={0.6} />
+          {/* animated mascot mouth */}
+          <group ref={mouthGroupRef} position={[0, EYE_Y - 0.125, FACE_Z]}>
+            <mesh
+              ref={mouthSmileRef}
+              geometry={mouthSmileGeometry}
+              material={mouthMaterial}
+              position={[0, 0, 0.002]}
+            />
+            <mesh
+              ref={mouthOpenRef}
+              geometry={mouthOpenGeometry}
+              material={mouthMaterial}
+              position={[0, 0, 0.002]}
+              visible={false}
+            >
+              <mesh
+                ref={tongueRef}
+                geometry={tongueGeometry}
+                material={tongueMaterial}
+                position={[0, -0.009, 0.007]}
+                scale={[1, 0.6, 0.5]}
+              />
             </mesh>
-            <mesh position={[0, -0.12, 0]}>
-              <sphereGeometry args={[0.05, 12, 12]} />
-              <meshStandardMaterial color="#2A211B" roughness={0.6} />
-            </mesh>
+          </group>
+
+          {/* Contextual Action: Planning / Thinking Clipboard, Pencil & Mascot Hands */}
+          <group ref={clipboardGroupRef} visible={false}>
+            {/* Wooden board facing camera on +Z: solid back of the board */}
+            <mesh geometry={boardGeometry} material={boardMaterial} />
+            {/* Gold clip centered on top clamping the board & paper */}
+            <mesh geometry={clipGeometry} material={clipMaterial} position={[0, 0.11, 0]} />
+            {/* Paper on inner face (facing avatar, -Z) */}
+            <mesh geometry={paperGeometry} material={paperMaterial} position={[0, -0.01, -0.008]} />
+
+            {/* Mascot left paw holding the edge of the clipboard */}
+            <group position={[-0.095, -0.03, 0]}>
+              <mesh geometry={pawLeftGeometry} material={pawMaterial} scale={[0.95, 0.85, 0.9]} />
+              <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.014, 0.008, 0.008]} rotation={[0, -0.3, -0.5]} />
+              <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.014, -0.010, 0.008]} rotation={[0, -0.3, -0.5]} />
+            </group>
+
+            {/* Pencil & Mascot right writing paw scribbling on inner face paper */}
+            <group ref={pencilRef} position={[-0.045, 0.01, -0.024]}>
+              {/* Pencil shaft */}
+              <mesh geometry={pencilGeometry} material={pencilMaterial} />
+              {/* Graphite lead tip touching paper on inner face */}
+              <mesh geometry={pencilTipGeometry} material={pencilTipMaterial} position={[0, -0.074, 0]} rotation={[Math.PI, 0, 0]} />
+              {/* Mascot right writing paw gripping the pencil */}
+              <group position={[0, -0.01, -0.008]}>
+                <mesh geometry={pawPalmGeometry} material={pawMaterial} scale={[0.9, 0.75, 0.8]} />
+                <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.014, 0.006, 0.010]} rotation={[0.4, 0.2, 0.6]} />
+                <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[-0.014, -0.004, -0.008]} rotation={[-0.4, -0.2, -0.6]} />
+              </group>
+            </group>
+          </group>
+
+          {/* Contextual Action: Cooking Frying Pan, Handle, Mascot Paws & Tossing Food */}
+          <group ref={panGroupRef} visible={false}>
+            {/* Outer pan body */}
+            <mesh geometry={panOuterGeometry} material={panOuterMaterial} />
+            {/* Inner recessed cooking surface */}
+            <mesh geometry={panInnerGeometry} material={panInnerMaterial} position={[0, 0.006, 0]} />
+            {/* Rounded metallic rim */}
+            <mesh geometry={panRimGeometry} material={panRimMaterial} position={[0, 0.024, 0]} rotation={[Math.PI / 2, 0, 0]} />
+
+            {/* Handle assembly angled inward toward the avatar's right side */}
+            <group position={[0.14, 0.012, -0.04]} rotation={[0, 0.44, -1.32]}>
+              {/* Metal mounting bracket at rim */}
+              <mesh geometry={panBracketGeometry} material={panBracketMaterial} position={[0, 0.018, 0]} />
+              {/* Wooden handle shaft */}
+              <mesh geometry={panHandleGeometry} material={panHandleMaterial} position={[0, 0.13, 0]} />
+              {/* Metal hanging loop at end of handle */}
+              <mesh geometry={panHandleTipGeometry} material={panBracketMaterial} position={[0, 0.245, 0]} rotation={[0, Math.PI / 2, 0]} />
+
+              {/* Mascot right paw wrapping firmly around the handle grip */}
+              <group position={[0, 0.185, 0]}>
+                {/* Main cute chubby palm */}
+                <mesh geometry={pawPalmGeometry} material={pawMaterial} scale={[1.15, 0.85, 0.95]} />
+                {/* Curled fingers wrapped around the front of the handle */}
+                <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.018, 0.008, 0.014]} rotation={[0.4, 0.2, 0.5]} />
+                <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.018, -0.012, 0.014]} rotation={[0.4, 0.2, 0.5]} />
+                {/* Opposing thumb wrapped around the back */}
+                <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[-0.018, 0, -0.012]} rotation={[-0.4, -0.2, -0.5]} />
+              </group>
+            </group>
+
+            {/* Mascot left paw resting cutely against the left rim */}
+            <group position={[-0.175, 0.018, -0.01]}>
+              <mesh geometry={pawLeftGeometry} material={pawMaterial} scale={[1.1, 0.9, 0.95]} />
+              <mesh geometry={pawFingerGeometry} material={pawMaterial} position={[0.015, 0.012, 0.01]} rotation={[-0.2, 0.3, -0.6]} />
+            </group>
+
+            {/* Food morsels sizzling / tossing inside pan */}
+            {foodGeometries.map((geom, i) => (
+              <mesh
+                key={i}
+                ref={(el) => {
+                  foodRefs.current[i] = el;
+                }}
+                geometry={geom}
+                material={foodMaterials[i]}
+                position={i === 0 ? [-0.042, 0.014, 0.012] : i === 1 ? [0.018, 0.016, -0.026] : [0.046, 0.014, 0.018]}
+              />
+            ))}
           </group>
 
           {/* puffy multi-lobe chef toque */}
