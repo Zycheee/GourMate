@@ -71,6 +71,24 @@ function rmsToUnit(buf: Uint8Array): number {
   return Math.min(1, Math.sqrt(sum / buf.length) * 3.2);
 }
 
+/**
+ * Extract speech volume and syllable dynamics for avatar lip-sync.
+ * Blends RMS (phoneme core) and peak transient (consonant attack) with gain
+ * so spoken words produce clear, lively 0.2..1.0 levels while speech pauses drop to 0.
+ */
+function speechLevelToUnit(buf: Uint8Array): number {
+  let sum = 0;
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = Math.abs((buf[i] - 128) / 128);
+    sum += v * v;
+    if (v > peak) peak = v;
+  }
+  const rms = Math.sqrt(sum / buf.length);
+  const combined = rms * 0.7 + peak * 0.3;
+  return Math.min(1, Math.max(0, combined * 4.8));
+}
+
 /* ------------------------------------------------------------------ */
 /* Shared AudioContext (resumed on user gesture)                       */
 /* ------------------------------------------------------------------ */
@@ -502,6 +520,10 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+export interface TtsPlayerHandlers {
+  onEnded?: () => void;
+}
+
 export class TtsPlayer {
   private analyser: AnalyserNode | null = null;
   private gain: GainNode | null = null;
@@ -509,6 +531,11 @@ export class TtsPlayer {
   private playing = false;
   private current: AudioBufferSourceNode | null = null;
   private raf = 0;
+  private handlers?: TtsPlayerHandlers;
+
+  constructor(handlers?: TtsPlayerHandlers) {
+    this.handlers = handlers;
+  }
 
   private ensureGraph(): AudioContext {
     const ctx = ensureAudioContext();
@@ -560,7 +587,9 @@ export class TtsPlayer {
     const next = this.queue.shift();
     if (!next) {
       levelState.mouth = 0;
+      levelState.mouthSmoothed = 0;
       this.stopLevelPump();
+      this.handlers?.onEnded?.();
       return;
     }
     const ctx = this.ensureGraph();
@@ -584,6 +613,8 @@ export class TtsPlayer {
       // tts_failed / audio_corrupt — degrade to text-only continuation.
       this.playing = false;
       this.current = null;
+      levelState.mouth = 0;
+      levelState.mouthSmoothed = 0;
       void this.pump();
     }
   }
@@ -592,10 +623,17 @@ export class TtsPlayer {
     if (this.raf) return;
     const tick = (): void => {
       const analyser = this.analyser;
-      if (analyser) {
+      if (analyser && this.playing) {
         analyser.getByteTimeDomainData(this.levelBuf);
-        levelState.mouth = rmsToUnit(this.levelBuf);
-        levelState.mouthSmoothed += (levelState.mouth - levelState.mouthSmoothed) * 0.35;
+        const target = speechLevelToUnit(this.levelBuf);
+        levelState.mouth = target;
+        // Asymmetric attack/release envelope:
+        // Snappy attack so mouth opens instantly with spoken phonemes, natural release during pauses
+        if (target > levelState.mouthSmoothed) {
+          levelState.mouthSmoothed += (target - levelState.mouthSmoothed) * 0.75;
+        } else {
+          levelState.mouthSmoothed += (target - levelState.mouthSmoothed) * 0.28;
+        }
       }
       this.raf = requestAnimationFrame(tick);
     };
@@ -607,8 +645,8 @@ export class TtsPlayer {
     this.raf = 0;
   }
 
-  /** fftSize 256 → frequencyBinCount 128. */
-  private levelBuf = new Uint8Array(128);
+  /** fftSize 256 time-domain buffer. */
+  private levelBuf = new Uint8Array(256);
 }
 
 /* ------------------------------------------------------------------ */

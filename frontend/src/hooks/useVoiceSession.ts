@@ -244,6 +244,11 @@ export function useVoiceSession(): VoiceSessionApi {
       }
 
       case "state": {
+        // If the server signals idle while the local TTS player is still playing
+        // or has audio chunks queued, keep answering until playback finishes (handled by onEnded).
+        if (msg.voice_state === "idle" && ttsRef.current?.isBusy) {
+          break;
+        }
         // Server-authoritative avatar state (architecture §7).
         s.setVoiceState(msg.voice_state);
         if (msg.voice_state === "triage") {
@@ -375,7 +380,17 @@ export function useVoiceSession(): VoiceSessionApi {
     }
     socketRef.current.connect();
 
-    if (!ttsRef.current) ttsRef.current = new TtsPlayer();
+    if (!ttsRef.current) {
+      ttsRef.current = new TtsPlayer({
+        onEnded: () => {
+          const cur = useSession.getState();
+          if (!cur.userSpeaking && (cur.voiceState === "answering" || cur.voiceState === "triage")) {
+            if (cur.triage) cur.setTriage(null);
+            cur.setVoiceState("idle");
+          }
+        }
+      });
+    }
 
     if (!micRef.current) {
       micRef.current = new MicCapture({
