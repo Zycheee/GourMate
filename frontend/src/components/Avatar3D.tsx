@@ -199,8 +199,6 @@ const PIVOT_Y = 0.22;
 
 function useAvatarPlacement(receded: boolean) {
   const size = useThree((s) => s.size);
-  const chatOpen = useSession((s) => s.chatOpen);
-  const infoOpen = useSession((s) => s.infoOpen);
   const offsetPx = useAvatarOffsetPx();
   const portrait = size.height > size.width;
   const aspect = size.width / size.height;
@@ -212,26 +210,26 @@ function useAvatarPlacement(receded: boolean) {
       // Glide so the model centres in the free space the open cards leave;
       // the helper owns the pixel maths, converted here to world units at the
       // avatar plane (viewW world units span size.width pixels).
+      // Scale is strictly static (1) — opening/closing cards never changes the avatar size.
       const x = offsetPx * (viewW / Math.max(1, size.width));
-      const squeeze = size.width >= 1024 && chatOpen && infoOpen ? 0.94 : 1;
       return {
         // Dead-center vertically — the model sits in the middle of the free
-        // space (the glide is horizontal only).
+        // space (the glide is horizontal only). Size is completely static.
         pos: [x, 0, 0] as [number, number, number],
-        scale: squeeze
+        scale: 1
       };
     }
     if (portrait) {
       return {
         pos: [viewW * 0.26, viewH * 0.3, -0.55] as [number, number, number],
-        scale: 0.4
+        scale: 1
       };
     }
     return {
       pos: [viewW * 0.34, -viewH * 0.36, -0.55] as [number, number, number],
-      scale: 0.44
+      scale: 1
     };
-  }, [receded, portrait, viewW, size.width, offsetPx, chatOpen, infoOpen]);
+  }, [receded, portrait, viewW, size.width, offsetPx]);
 
   return { target, portrait, viewW, viewH };
 }
@@ -1972,19 +1970,18 @@ function RecedingGroup({
   const reduced = usePrefersReducedMotion();
   const [spring, api] = useSpring(() => ({
     pos: target.pos,
-    scale: target.scale,
     config: SPRING
   }));
 
   useEffect(() => {
-    // Panel toggles glide (never snap); reduced motion places instantly.
-    api.start({ pos: target.pos, scale: target.scale, config: SPRING, immediate: reduced });
+    // Panel toggles glide horizontally (never snap); reduced motion places instantly.
+    // Size is strictly static (scale 1.0) and never changes when opening/closing panels.
+    api.start({ pos: target.pos, config: SPRING, immediate: reduced });
   }, [api, target, reduced]);
 
   const springPos = spring.pos as unknown as [number, number, number];
-  const springScale = spring.scale as unknown as number;
   return (
-    <animated.group position={springPos} scale={springScale}>
+    <animated.group position={springPos} scale={1}>
       {children}
     </animated.group>
   );
