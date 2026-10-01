@@ -1535,3 +1535,14 @@ async def test_cancel_timer_during_intake_does_not_reset():
     # It fell through to the normal conversational/tool path.
     assert len(gemini.calls) == 1
     assert session.types()[-1] == "turn_end"
+
+
+async def test_presented_plan_offers_contextual_cooking_choice_after_readback():
+    session = _FakeSession()
+    recipe = _plan_recipe()
+    pipeline = _pipeline(session, gemini=_ScriptedGemini([]), recipes=_FakeRecipes(recipe))
+    await pipeline._present_plan(recipe)
+    choices = [event for event in session.events if event["type"] == "choices"]
+    assert choices == [{"type": "choices", "options": [{"id": "start_cooking", "label": "Let's cook"}]}]
+    assert session.state.phase == "planning"
+    assert session.events.index(choices[0]) > next(i for i, event in enumerate(session.events) if event["type"] == "plan")

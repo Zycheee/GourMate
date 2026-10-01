@@ -1180,6 +1180,7 @@ class VoicePipeline:
 
         spoken = self._format_plan(recipe)
         await self._say(spoken)
+        await self._send(protocol.choices([{"id": "start_cooking", "label": "Let's cook"}]))
         await self._finish_turn()
 
     @staticmethod
