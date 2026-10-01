@@ -48,7 +48,7 @@ export const UI = {
   copied: "Copied.",
   transcript: "Transcript",
   chatTitle: "Chat",
-  composerPlaceholder: "type a message or paste a recipe…",
+  composerPlaceholder: "Message or paste a recipe…",
   send: "Send",
   showChat: "Show chat",
   hideChat: "Hide chat",

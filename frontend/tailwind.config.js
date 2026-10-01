@@ -25,9 +25,9 @@ export default {
           dark: "#0D2116"
         },
         "earth-yellow": {
-          DEFAULT: "#E1A95F",
-          light: "#E9BE80",
-          dark: "#C88E44"
+          DEFAULT: "#FFC370",
+          light: "#FFD49A",
+          dark: "#E5A653"
         },
         "jet-black": "#0A0A0A",
         charcoal: "#1F1F1F",
@@ -64,13 +64,13 @@ export default {
       fontSize: {
         "10": ["0.625rem", { lineHeight: "1.3", letterSpacing: "0.06em" }],
         "11": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.06em" }],
-        "12": ["clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem)", { lineHeight: "1.35" }],
-        "13": ["clamp(0.75rem, 0.72rem + 0.15vw, 0.8125rem)", { lineHeight: "1.4" }],
-        "14": ["clamp(0.78125rem, 0.74rem + 0.2vw, 0.875rem)", { lineHeight: "1.4" }],
-        "16": ["clamp(0.84375rem, 0.8rem + 0.25vw, 0.9375rem)", { lineHeight: "1.5" }],
-        "18": ["clamp(0.9375rem, 0.88rem + 0.3vw, 1.0625rem)", { lineHeight: "1.4" }],
-        "20": ["clamp(1.03125rem, 0.96rem + 0.4vw, 1.1875rem)", { lineHeight: "1.3", letterSpacing: "-0.015em" }],
-        "28": ["clamp(1.2rem, 1.08rem + 0.65vw, 1.5rem)", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
+        "12": ["0.75rem", { lineHeight: "1.35" }],
+        "13": ["0.8125rem", { lineHeight: "1.5" }],
+        "14": ["0.875rem", { lineHeight: "1.5" }],
+        "16": ["1rem", { lineHeight: "1.5" }],
+        "18": ["1.125rem", { lineHeight: "1.5" }],
+        "20": ["1.25rem", { lineHeight: "1.3", letterSpacing: "-0.015em" }],
+        "28": ["clamp(1.375rem, 1.1rem + 1vw, 1.75rem)", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
         "40": ["clamp(1.45rem, 1.25rem + 1vw, 2rem)", { lineHeight: "1.15", letterSpacing: "-0.025em" }],
         "56": ["clamp(1.75rem, 1.45rem + 1.5vw, 2.5rem)", { lineHeight: "1.1", letterSpacing: "-0.03em" }]
       },
