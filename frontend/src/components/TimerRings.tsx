@@ -53,7 +53,7 @@ function Ring({
   return (
     <span className="relative block h-11 w-11 shrink-0" aria-hidden="true">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={4} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--ink-muted-rgb) / 0.25)" strokeWidth={4} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -103,16 +103,16 @@ function ExpandedTimer({
       role="dialog"
       aria-modal="true"
       aria-label={`${timer.label} timer`}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 px-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 px-6 "
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-black/5 dark:border-white/10 glass-strong p-6 text-center shadow-warm-lg"
+        className="flex w-full max-w-sm flex-col items-center rounded-[24px] border border-black/5 dark:border-white/10 clay-strong p-6 text-center clay-strong"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative" style={{ width: size, height: size }}>
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={16} />
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--ink-muted-rgb) / 0.25)" strokeWidth={16} />
             <circle
               cx={size / 2}
               cy={size / 2}
@@ -139,7 +139,7 @@ function ExpandedTimer({
               type="button"
               onClick={() => updateTimer(timer.id, { ends_at: timer.ends_at + 60_000 })}
               {...pressProps}
-              className="h-9 sm:h-9.5 flex-1 rounded-xl bg-accent-strong px-4 text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="h-9 sm:h-9.5 flex-1 rounded-xl clay-primary px-4 text-13 font-medium text-dark-serpent  transition-colors duration-micro ease-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {UI.timerAddOne}
             </motion.button>
@@ -147,7 +147,7 @@ function ExpandedTimer({
               type="button"
               onClick={() => updateTimer(timer.id, { ends_at: timer.ends_at + 300_000 })}
               {...pressProps}
-              className="h-9 sm:h-9.5 flex-1 rounded-xl bg-accent-strong px-4 text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="h-9 sm:h-9.5 flex-1 rounded-xl clay-primary px-4 text-13 font-medium text-dark-serpent  transition-colors duration-micro ease-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {UI.timerAddFive}
             </motion.button>
@@ -159,7 +159,7 @@ function ExpandedTimer({
               onClose();
             }}
             {...pressProps}
-            className="h-9 sm:h-9.5 rounded-xl border border-ember/40 bg-ember/5 px-4 text-13 font-medium text-ember shadow-sm transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+            className="h-9 sm:h-9.5 rounded-xl border border-ember/40 bg-ember/5 px-4 text-13 font-medium text-ember clay-soft transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
           >
             {UI.timerExpandedCancel}
           </motion.button>
@@ -202,7 +202,7 @@ export default function TimerRings() {
                     aria-label={`${timer.label}, ${formatMMSS(remaining / 1000)} remaining`}
                     {...pressProps}
                     className={[
-                      "flex h-9 sm:h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-1 text-left transition-colors duration-micro ease-ui hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      "clay-control flex min-h-12 w-full items-center gap-2.5 rounded-xl px-2.5 py-1 text-left transition-colors duration-micro ease-ui hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       done ? "timer-pulse" : ""
                     ].join(" ")}
                   >

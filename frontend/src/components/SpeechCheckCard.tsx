@@ -230,7 +230,7 @@ export default function SpeechCheckCard() {
           onClick={startTest}
           disabled={armed}
           {...pressProps}
-          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-accent-strong px-3.5 py-1 text-12 sm:text-13 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg clay-primary px-3.5 py-1 text-12 sm:text-13 font-medium text-dark-serpent  transition-colors duration-micro ease-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
         >
           {result ? UI.speechTest.retry : UI.speechTest.start}
         </motion.button>
@@ -238,7 +238,7 @@ export default function SpeechCheckCard() {
           type="button"
           onClick={nextPhrase}
           {...pressProps}
-          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 py-1 text-12 sm:text-13 font-medium text-ink-muted shadow-sm transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface dark:bg-surface-2 px-3.5 py-1 text-12 sm:text-13 font-medium text-ink-muted clay-soft transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {UI.speechTest.next}
         </motion.button>

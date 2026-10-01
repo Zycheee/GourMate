@@ -54,7 +54,7 @@ export default function ErrorToast({ onRetry }: { onRetry?: () => void }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -10, scale: 0.97 }}
           transition={spring}
-          className="mx-auto flex w-full max-w-xl items-start gap-3 rounded-2xl glass px-4 py-3 shadow-warm"
+          className="mx-auto flex w-full max-w-xl items-start gap-3 rounded-[24px] clay px-4 py-3 clay"
         >
           {toast.kind === "info" ? (
             <Check className="mt-0.5 h-4.5 w-4.5 shrink-0 text-accent" aria-hidden="true" />

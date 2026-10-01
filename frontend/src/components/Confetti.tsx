@@ -12,7 +12,7 @@ const COLORS = [
   "rgb(var(--accent-soft-rgb))", // Soft saffron
   "rgb(var(--tallow-rgb))",      // Earth yellow
   "#046241",                     // Castleton Green
-  "#E1A95F",                     // Earth Yellow
+  "#FFC370",                     // Earth Yellow
   "#F5EEDB",                     // Paper
   "#FFFFFF"                      // White
 ];

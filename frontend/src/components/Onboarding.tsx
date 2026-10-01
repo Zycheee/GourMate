@@ -61,16 +61,16 @@ export default function Onboarding({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/88 px-6 backdrop-blur-md">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/95 px-6 ">
       <motion.section
         aria-label="Welcome"
         initial={{ opacity: 0, y: 18, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={spring}
-        className="flex w-full max-w-md flex-col items-center rounded-2xl border border-black/5 dark:border-white/10 bg-surface px-6 py-8 text-center shadow-warm-lg sm:px-8 sm:py-9"
+        className="flex w-full max-w-md flex-col items-center rounded-[24px] border border-black/5 dark:border-white/10 bg-surface px-6 py-8 text-center clay-strong sm:px-8 sm:py-9"
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-tallow/15 shadow-sm">
-          <Icon className="h-6 w-6 text-tallow" aria-hidden="true" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-[24px] bg-earth-yellow/30 dark:bg-earth-yellow/15 clay-soft">
+          <Icon className="h-6 w-6 text-castleton-green dark:text-earth-yellow" aria-hidden="true" />
         </div>
 
         <h1 className="mt-5 font-display text-20 sm:text-28 font-semibold tracking-tight text-ink">{card.title}</h1>
@@ -86,7 +86,7 @@ export default function Onboarding({
           type="button"
           onClick={() => void advance()}
           {...pressProps}
-          className="mt-6 h-10 w-full rounded-xl bg-accent-strong px-6 text-13 sm:text-14 font-medium text-white shadow-sm transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="mt-6 h-10 w-full rounded-xl clay-primary px-6 text-13 sm:text-14 font-medium text-dark-serpent  transition-colors duration-micro ease-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           {card.action}
         </motion.button>

@@ -202,7 +202,7 @@ function useAvatarPlacement(receded: boolean) {
   const offsetPx = useAvatarOffsetPx();
   const portrait = size.height > size.width;
   const aspect = size.width / size.height;
-  const viewH = 2 * 4.6 * Math.tan((32 * Math.PI) / 180 / 2);
+  const viewH = 2 * 4.6 * Math.tan((22 * Math.PI) / 180 / 2);
   const viewW = viewH * aspect;
 
   const target = useMemo(() => {
@@ -1997,8 +1997,13 @@ export default function Avatar3D() {
 
   return (
     <Canvas
+      // Measure the unscaled backing box. Measuring transformed bounds would
+      // shrink the canvas a second time and pull the model off its centre.
+      resize={{ offsetSize: true }}
       dpr={tier === "low" ? 1 : tier === "medium" ? [1, 1.5] : [1, 2]}
-      camera={{ position: [0, 0.25, 4.6], fov: 32 }}
+      camera={{ position: [0, 0.25, 4.6], fov: 22 }}
+      // Frame the body-and-hat midpoint, rather than the body's origin.
+      onCreated={({ camera }) => camera.lookAt(0, PIVOT_Y * 0.8, 0)}
       gl={{
         antialias: tier !== "low",
         alpha: true,

@@ -27,7 +27,7 @@ export default function StepCard() {
       variants={fadeRise}
       initial="hidden"
       animate="show"
-      className="w-full rounded-2xl glass px-4 py-3.5 sm:px-5 sm:py-4 shadow-warm transition-colors duration-layout ease-ui"
+      className="w-full rounded-[24px] clay px-4 py-3.5 sm:px-5 sm:py-4 clay transition-colors duration-layout ease-ui"
     >
       <p className="font-mono text-11 uppercase tracking-[0.18em] text-tallow tabular-nums">
         {UI.stepOf(currentStepIndex + 1, total)}

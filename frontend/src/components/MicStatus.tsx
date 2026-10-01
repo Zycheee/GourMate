@@ -54,7 +54,7 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
 
   return (
     <div className="flex items-center gap-2.5">
-      <div className="flex h-8.5 sm:h-9 items-center gap-2 rounded-full glass px-3.5 shadow-sm">
+      <div className="flex h-8.5 sm:h-9 items-center gap-2 rounded-full clay px-3.5 clay-soft">
         <span className="relative flex h-2.5 w-2.5 items-center justify-center" aria-hidden="true">
           {!muted && !offline && level > 0.02 && (
             <span
@@ -80,11 +80,11 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
         title={muted ? UI.unmute : UI.mute}
         {...pressProps}
         className={[
-          "flex h-8.5 w-8.5 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors duration-micro ease-ui shadow-sm",
+          "flex h-8.5 w-8.5 sm:h-9 sm:w-9 items-center justify-center rounded-full clay-control transition-colors duration-micro ease-ui clay-soft",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           muted
             ? "bg-steel/25 text-ink hover:bg-steel/35"
-            : "bg-surface/90 dark:bg-surface-2/90 text-ink hover:bg-surface"
+            : "bg-surface dark:bg-surface-2 text-ink hover:bg-surface"
         ].join(" ")}
       >
         {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}

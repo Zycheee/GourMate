@@ -26,8 +26,8 @@ const APP_VERSION: string =
   (import.meta.env?.VITE_APP_VERSION as string | undefined) ?? "1.0.0";
 
 const SELECT_CLASS = [
-  "h-8 sm:h-8.5 w-[11.5rem] max-w-full rounded-lg border border-black/10 dark:border-white/15",
-  "bg-surface/90 dark:bg-surface-2/90 px-2.5 text-12 sm:text-13 font-medium text-ink shadow-sm",
+  "clay-field h-9 w-[11.5rem] max-w-full rounded-lg border border-black/10 dark:border-white/15",
+  "px-2.5 text-12 sm:text-13 font-medium text-ink",
   "focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/50"
 ].join(" ");
 
@@ -36,7 +36,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1.5">
       <h3 className="px-1 font-mono text-11 uppercase tracking-[0.16em] text-ink-muted/80">{title}</h3>
-      <div className="flex flex-col rounded-xl border border-black/5 dark:border-white/10 bg-surface/60 dark:bg-surface-2/50 backdrop-blur-md px-3.5 py-2.5 divide-y divide-black/5 dark:divide-white/5 gap-2.5 shadow-sm">
+      <div className="flex flex-col rounded-xl border border-black/5 dark:border-white/10 bg-surface-2  px-3.5 py-2.5 divide-y divide-black/5 dark:divide-white/5 gap-2.5 clay-soft">
         {children}
       </div>
     </section>
@@ -143,7 +143,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
         >
           <motion.div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 "
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -158,7 +158,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
             transition={{ type: "spring", stiffness: 360, damping: 28, mass: 0.85 }}
             className={[
               "relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col",
-              "rounded-2xl glass shadow-warm-lg overflow-hidden"
+              "rounded-[24px] clay-strong overflow-hidden"
             ].join(" ")}
           >
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/10 px-5 py-3 sm:px-6">
@@ -199,7 +199,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                 disabled={previewPending}
                 aria-busy={previewPending}
                 {...pressProps}
-                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/15 bg-surface/90 dark:bg-surface-2/90 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/15 bg-surface dark:bg-surface-2 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent clay-soft disabled:pointer-events-none disabled:opacity-50"
               >
                 <Play className="h-3.5 w-3.5" aria-hidden="true" />
                 {UI.previewVoice}
@@ -236,9 +236,9 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                 height={28}
                 radius={14}
                 trackColor="rgb(var(--steel-rgb) / 0.35)"
-                trackOnColor="var(--accent)"
+                trackOnColor="var(--castleton-green)"
                 thumbColor="#ffffff"
-                thumbOnColor="#ffffff"
+                thumbOnColor="#F5EEDB"
               />
             </Row>
           </Section>
@@ -260,7 +260,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                       "relative flex-1 py-1 px-3 text-12 sm:text-13 font-medium rounded-md transition-all duration-micro",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       settings.theme === t.value
-                        ? "bg-surface text-ink shadow-sm dark:bg-surface-2"
+                        ? "bg-surface text-ink clay-soft dark:bg-surface-2 clay-soft"
                         : "text-ink-muted hover:text-ink"
                     ].join(" ")}
                   >
@@ -278,7 +278,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                 type="button"
                 onClick={confirming ? confirmClearCookbook : () => setConfirming(true)}
                 {...pressProps}
-                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-ember/30 bg-ember/5 px-3 py-1 text-12 sm:text-13 font-medium text-ember transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember shadow-sm"
+                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-ember/30 bg-ember/5 px-3 py-1 text-12 sm:text-13 font-medium text-ember transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember clay-soft"
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 {confirming ? UI.clearCookbookQuestion : UI.clearCookbook}
@@ -289,7 +289,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                     type="button"
                     onClick={confirmClearCookbook}
                     {...pressProps}
-                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-ember px-3.5 py-1 text-12 sm:text-13 font-medium text-white transition-colors duration-micro ease-ui hover:bg-ember/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember shadow-sm"
+                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-ember px-3.5 py-1 text-12 sm:text-13 font-medium text-white dark:text-dark-serpent transition-colors duration-micro ease-ui hover:bg-ember/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember clay-soft"
                   >
                     {UI.confirm}
                   </motion.button>
@@ -297,7 +297,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                     type="button"
                     onClick={() => setConfirming(false)}
                     {...pressProps}
-                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface/90 dark:bg-surface-2/90 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
+                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface dark:bg-surface-2 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent clay-soft"
                   >
                     {UI.cancel}
                   </motion.button>

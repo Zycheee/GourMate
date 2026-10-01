@@ -34,7 +34,7 @@ export default function StepRail() {
                   "block rounded-full transition-all duration-state ease-ui",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   active
-                    ? "h-3 w-3 bg-accent ring-2 ring-accent/40 ring-offset-2 ring-offset-bg"
+                    ? "h-3 w-3 clay-soft bg-accent ring-2 ring-accent/40 ring-offset-2 ring-offset-bg"
                     : done
                       ? "h-2.5 w-2.5 bg-tallow/80"
                       : "h-2.5 w-2.5 bg-steel/35"

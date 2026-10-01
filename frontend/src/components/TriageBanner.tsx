@@ -24,7 +24,7 @@ export default function TriageBanner() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -10, scale: 0.97 }}
           transition={spring}
-          className="mx-auto flex w-full max-w-3xl items-start gap-3 rounded-2xl border border-ember/45 bg-ember/12 px-4 py-3 text-ink shadow-warm backdrop-blur-md"
+          className="mx-auto flex w-full max-w-3xl items-start gap-3 rounded-[24px] border border-ember/45 bg-ember/12 px-4 py-3 text-ink clay "
         >
           <AlertTriangle className="mt-0.5 h-4.5 w-4.5 shrink-0 text-ember" aria-hidden="true" />
           <div className="flex-1">

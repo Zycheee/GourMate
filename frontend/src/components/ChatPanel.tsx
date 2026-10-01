@@ -1,35 +1,12 @@
-/**
- * ChatPanel — the persistent conversation pane (Phase 1 rework of design §5.2).
- * Desktop: a left column beside the 3D canvas, minimizable to a thin rail.
- * Mobile: the bottom-drawer chat in the fixed stack App owns — collapses to a
- * handle + composer so it never blocks the avatar.
- *
- * Carries the whole session thread (`role="log"` + `aria-live="polite"` so new
- * turns are announced without stealing focus), the intake composer (moved off
- * the canvas), the voice-state announcement line (from the old Captions), and
- * the collapsible Speech check card (from the old TranscriptSheet).
- *
- * Message bubbles echo the recognized speech: "you" turns (final `transcript`
- * events / typed input) and "Planner" replies (`assistant_text` captions).
- * Newest messages sit at the bottom with auto-scroll.
- */
+/** Keep the conversation and its draft mounted while panels collapse or switch. */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  Copy,
-  Mic
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowUp, Check, Copy, Mic, PanelLeftClose } from "lucide-react";
+import ContextChoices from "./ContextChoices";
 import SpeechCheckCard from "./SpeechCheckCard";
 import { useSession } from "../store/session";
-import { useMediaQuery } from "../lib/useMediaQuery";
-import { bubbleVariants, pressProps, spring, threadVariants } from "../lib/motion";
+import { bubbleVariants, pressProps, threadVariants } from "../lib/motion";
 import { COPY, UI } from "../lib/copy";
 import type { ChatTurn } from "../types";
 
@@ -37,101 +14,32 @@ function authorLabel(role: ChatTurn["role"]): string {
   return role === "user" ? UI.youName : role === "assistant" ? UI.chefName : "tool";
 }
 
-export default function ChatPanel({ onSendText }: { onSendText: (text: string) => void }) {
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+export default function ChatPanel({ onSendText, active, draft: suppliedDraft, onDraftChange, onMinimize }: {
+  active: boolean; onSendText: (text: string) => void; onShowRecipe: () => void;
+  draft?: string; onDraftChange?: (draft: string) => void;
+  onMinimize?: () => void;
+}) {
   const transcript = useSession((s) => s.transcript);
   const liveCaption = useSession((s) => s.liveCaption);
   const voiceState = useSession((s) => s.voiceState);
-  const phase = useSession((s) => s.phase);
-  const recipe = useSession((s) => s.recipe);
-  /* Shared panel state (the avatar glides around open cards). */
-  const chatOpen = useSession((s) => s.chatOpen);
-  const setChatOpen = useSession((s) => s.setChatOpen);
-  const setInfoOpen = useSession((s) => s.setInfoOpen);
-  /* Offered multiple-choice chips (`choices` event) — ephemeral. */
-  const choices = useSession((s) => s.choices);
-  const setChoices = useSession((s) => s.setChoices);
 
-  const [expanded, setExpanded] = useState(false);
   const [speechOpen, setSpeechOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [localDraft, setLocalDraft] = useState("");
+  const draft = suppliedDraft ?? localDraft;
+  const setDraft = onDraftChange ?? setLocalDraft;
 
   const threadRef = useRef<HTMLDivElement>(null);
-  const handleRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const prevExpandedRef = useRef(expanded);
-  const prevOpenRef = useRef(chatOpen);
-
-  /* Desktop minimize swaps panel ↔ pill through AnimatePresence (`mode="wait"`),
-     so the successor control mounts after the exit — focus follows it via a
-     callback ref once the toggle's intent lands on it. */
-  const focusIntent = useRef<"expand" | "minimize" | null>(null);
-  const bindExpandChat = useCallback((el: HTMLButtonElement | null) => {
-    if (el && focusIntent.current === "expand") {
-      focusIntent.current = null;
-      try {
-        el.focus({ preventScroll: true });
-      } catch {
-        el.focus();
-      }
-    }
-  }, []);
-  const bindMinimizeChat = useCallback((el: HTMLButtonElement | null) => {
-    if (el && focusIntent.current === "minimize") {
-      focusIntent.current = null;
-      try {
-        el.focus({ preventScroll: true });
-      } catch {
-        el.focus();
-      }
-    }
-  }, []);
-
-  /* Desktop minimize: record where focus should land after the swap. */
-  useEffect(() => {
-    const was = prevOpenRef.current;
-    prevOpenRef.current = chatOpen;
-    if (was === chatOpen) return;
-    focusIntent.current = chatOpen ? "minimize" : "expand";
-  }, [chatOpen]);
-
-  /* Mobile drawer: Escape collapses; expanding focuses the thread, collapsing
-     returns focus to the handle. */
-  useEffect(() => {
-    if (isDesktop || !expanded) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setExpanded(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isDesktop, expanded]);
-
-  useEffect(() => {
-    const was = prevExpandedRef.current;
-    prevExpandedRef.current = expanded;
-    if (isDesktop || was === expanded) return;
-    if (expanded) {
-      threadRef.current?.focus();
-    } else {
-      handleRef.current?.focus();
-    }
-  }, [expanded, isDesktop]);
-
-  /* Newest at the bottom — follow the thread unless motion is reduced.
-     `expanded` is in the deps so the remounted drawer thread lands on the
-     newest turn when it opens. */
+  // Keep new messages visible without remounting the conversation on tab changes.
   useEffect(() => {
     const el = threadRef.current;
-    if (!el) return;
+    if (!el || !active) return;
     const reduced =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
-  }, [transcript, liveCaption, expanded]);
+  }, [transcript, liveCaption, active]);
 
   const copyAll = async (): Promise<void> => {
     const text = transcript.map((t) => `${authorLabel(t.role)}: ${t.text}`).join("\n");
@@ -168,11 +76,10 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
     caption !== "" && caption !== (lastAssistant?.text ?? "") ? caption : "";
   const isEmpty = transcript.length === 0 && !caption;
 
-  const showToolbar = isDesktop || expanded;
-
-  const toolbar = showToolbar ? (
-    <div className="flex items-center gap-1.5 border-b border-black/5 dark:border-white/10 px-4 py-2.5">
+  const toolbar = (
+    <div className="flex items-center gap-1.5 clay-header border-b border-black/5 dark:border-white/10 px-5">
       <h2 className="flex-1 truncate font-display text-16 sm:text-18 font-semibold tracking-tight text-ink">{UI.chatTitle}</h2>
+      {onMinimize && <button type="button" className="panel-minimize clay-control" aria-label="Minimize Conversation" title="Minimize Conversation" onClick={onMinimize}><PanelLeftClose size={16} aria-hidden="true" /></button>}
       <motion.button
         type="button"
         onClick={() => void copyAll()}
@@ -199,149 +106,8 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
       >
         <Mic className="h-3.5 w-3.5" />
       </motion.button>
-      {!isDesktop && (
-        <motion.button
-          type="button"
-          onClick={() => setExpanded(false)}
-          aria-label={UI.hideChat}
-          title={UI.hideChat}
-          {...pressProps}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-black/5 dark:hover:bg-white/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </motion.button>
-      )}
     </div>
-  ) : null;
-
-  const handle = !isDesktop && !expanded ? (
-    <div className="flex flex-col items-center">
-      <div className="mt-2 h-1 w-9 rounded-full bg-ink-muted/25" aria-hidden="true" />
-      <motion.button
-        type="button"
-        ref={handleRef}
-        onClick={() => setExpanded(true)}
-        aria-expanded={expanded}
-        {...pressProps}
-        className="flex h-9 w-full items-center justify-center gap-1.5 px-4 pb-1 pt-1 text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <ChevronUp className="h-4 w-4" aria-hidden="true" />
-        {UI.showChat}
-      </motion.button>
-    </div>
-  ) : null;
-
-  /* Intake choice chips — offered once the user has spoken/typed at least one
-     turn while nothing is scheduled yet (intake, no recipe). Each sends the
-     matching line through the composer's `onSendText`. The two chips stagger
-     in via container/item variants (a fixed set, so the stagger never
-     accumulates). */
-  const showIntakeChoices =
-    phase === "intake" && !recipe && transcript.some((t) => t.role === "user");
-
-  const intakeChoices = showIntakeChoices ? (
-    <motion.div
-      className="flex flex-wrap gap-2 px-4 pb-1"
-      variants={threadVariants}
-      initial="hidden"
-      animate="show"
-    >
-      <motion.button
-        type="button"
-        variants={bubbleVariants}
-        onClick={() => onSendText(UI.plan.cookNowText)}
-        {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface-2/90 dark:bg-surface-2/70 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-      >
-        {UI.plan.cookNow}
-      </motion.button>
-      <motion.button
-        type="button"
-        variants={bubbleVariants}
-        onClick={() => onSendText(UI.plan.planItText)}
-        {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-      >
-        {UI.plan.planIt}
-      </motion.button>
-    </motion.div>
-  ) : null;
-
-  /* Quick cook commands — Next/Repeat send the voice lines, Ingredients opens
-     the info card. Cook mode only; same chip styling as the intake pair. */
-  const cookChoices = phase === "cooking" ? (
-    <motion.div
-      className="flex flex-wrap gap-1.5 px-4 pb-1"
-      variants={threadVariants}
-      initial="hidden"
-      animate="show"
-    >
-      <motion.button
-        type="button"
-        variants={bubbleVariants}
-        onClick={() => onSendText(UI.quick.nextText)}
-        {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-      >
-        {UI.quick.next}
-      </motion.button>
-      <motion.button
-        type="button"
-        variants={bubbleVariants}
-        onClick={() => onSendText(UI.quick.repeatText)}
-        {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-      >
-        {UI.quick.repeat}
-      </motion.button>
-      <motion.button
-        type="button"
-        variants={bubbleVariants}
-        onClick={() => setInfoOpen(true)}
-        {...pressProps}
-        className="h-8 sm:h-8.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-      >
-        {UI.plan.ingredients}
-      </motion.button>
-    </motion.div>
-  ) : null;
-
-  /* Multiple-choice chips (`choices` event) — a small numbered group just
-     above the composer; tapping an option sends its label and clears the
-     group. Announced politely as the options arrive. */
-  const choiceGroup =
-    choices && choices.length > 0 ? (
-      <motion.div
-        className="px-4 pb-1"
-        role="group"
-        aria-label={UI.choicesLabel}
-        aria-live="polite"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={spring}
-      >
-        <p className="mb-1.5 font-mono text-11 uppercase tracking-[0.16em] text-ink-muted">
-          {UI.choicesLabel}
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {choices.map((choice, i) => (
-            <motion.button
-              key={choice.id}
-              type="button"
-              onClick={() => {
-                setChoices(null);
-                onSendText(choice.label);
-              }}
-              {...pressProps}
-              className="flex h-8 sm:h-8.5 items-center gap-1.5 rounded-full border border-black/5 dark:border-white/10 bg-surface/80 dark:bg-surface-2/80 px-3.5 text-12 sm:text-13 font-medium text-ink transition-colors duration-micro ease-ui hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-            >
-              <span className="font-mono text-11 tabular-nums text-accent-strong">{i + 1}</span>
-              {choice.label}
-            </motion.button>
-          ))}
-        </div>
-      </motion.div>
-    ) : null;
+  );
 
   const composer = (
     <form
@@ -367,11 +133,11 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
               submit();
             }
           }}
-          placeholder={UI.composerPlaceholder}
+          placeholder="Message the chef..."
           className={[
-            "w-full resize-none rounded-xl border border-black/10 dark:border-white/10 bg-surface-2/60 dark:bg-surface-2/40 px-3.5 py-2",
-            "text-13 sm:text-14 text-ink placeholder:text-ink-muted/60",
-            "transition-colors duration-micro ease-ui shadow-sm",
+            "clay-field w-full resize-none rounded-[18px] border border-black/10 dark:border-white/10  px-3.5 py-2.5",
+            "text-13 sm:text-14 text-ink placeholder:text-ink-muted",
+            "transition-colors duration-micro ease-ui",
             "focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/50"
           ].join(" ")}
         />
@@ -383,9 +149,9 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
         title={UI.send}
         {...pressProps}
         className={[
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm",
-          "bg-accent-strong text-white transition-colors duration-micro ease-ui",
-          "hover:bg-accent-strong/90 active:bg-accent-strong/80",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full ",
+          "clay-primary text-dark-serpent transition-colors duration-micro ease-ui",
+          " ",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           "disabled:pointer-events-none disabled:opacity-40"
         ].join(" ")}
@@ -403,11 +169,11 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
       role="log"
       aria-live="polite"
       aria-label={UI.chatTitle}
-      className="no-scrollbar flex-1 overflow-y-auto px-4 py-4 outline-none"
+      className="min-h-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
     >
       {isEmpty ? (
         <motion.div
-          className="flex flex-col items-start"
+          className="flex flex-col items-start conversation-welcome"
           variants={bubbleVariants}
           initial="hidden"
           animate="show"
@@ -415,9 +181,10 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
           <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-muted/75">
             {UI.chefName}
           </span>
-          <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink shadow-sm">
+          <p className="mt-1 max-w-[85%] rounded-[24px] rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2 dark:bg-surface-2 px-4 py-3 text-13 sm:text-14 leading-relaxed text-ink clay-soft">
             {COPY.intakePrompt}
           </p>
+          <p className="mt-3 max-w-[30ch] text-13 leading-relaxed text-ink-muted">Tell me what you have, name a dish, or paste a recipe. We’ll take it from there.</p>
         </motion.div>
       ) : (
         /* Each turn animates on mount (container/item variants with explicit
@@ -453,10 +220,10 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
                 </span>
                 <p
                   className={[
-                    "mt-1 max-w-[85%] px-3.5 py-2 text-13 sm:text-14 leading-relaxed shadow-sm",
+                    "mt-1 max-w-[85%] px-4 py-3 text-13 sm:text-14 leading-relaxed clay-soft",
                     turn.role === "user"
-                      ? "rounded-2xl rounded-tr-sm bg-accent-strong text-white"
-                      : "rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 text-ink"
+                      ? "rounded-[24px] rounded-tr-sm bg-accent-strong text-white"
+                      : "rounded-[24px] rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2 dark:bg-surface-2 text-ink"
                   ].join(" ")}
                 >
                   {turn.text}
@@ -478,7 +245,7 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
               <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-muted/75">
                 {UI.chefName}
               </span>
-              <p className="mt-1 max-w-[85%] rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2/95 dark:bg-surface-2/90 px-3.5 py-2 text-13 sm:text-14 leading-relaxed text-ink opacity-70 shadow-sm">
+              <p className="mt-1 max-w-[85%] rounded-[24px] rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2 dark:bg-surface-2 px-4 py-3 text-13 sm:text-14 leading-relaxed text-ink opacity-70 clay-soft">
                 {captionPending}
               </p>
             </motion.li>
@@ -489,93 +256,15 @@ export default function ChatPanel({ onSendText }: { onSendText: (text: string) =
   );
 
   return (
-    <>
-      <AnimatePresence initial={false} mode="wait">
-        {isDesktop && !chatOpen ? (
-          /* Round expand handle floating where the card was (near the left
-             edge) — icon-only, the free canvas stays full width. */
-          <motion.aside
-            key="chat-pill"
-            id="chat-panel"
-            aria-label={UI.chatTitle}
-            className="absolute left-4 top-1/2 z-20"
-            initial={{ opacity: 0, x: -80, scale: 0.85, y: "-50%" }}
-            animate={{ opacity: 1, x: 0, scale: 1, y: "-50%" }}
-            exit={{ opacity: 0, x: -80, scale: 0.85, y: "-50%" }}
-            transition={{ type: "spring", stiffness: 340, damping: 28 }}
-          >
-            <motion.button
-              type="button"
-              ref={bindExpandChat}
-              onClick={() => setChatOpen(true)}
-              aria-expanded={false}
-              aria-controls="chat-panel"
-              aria-label={UI.showChat}
-              title={UI.showChat}
-              {...pressProps}
-              className="flex h-9 sm:h-9.5 items-center gap-2 rounded-full glass border border-black/5 dark:border-white/10 px-3.5 sm:px-4 text-13 sm:text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-            >
-              <ChevronRight className="h-4 w-4 shrink-0" />
-              {UI.chatTitle}
-            </motion.button>
-          </motion.aside>
-        ) : (
-          <motion.aside
-            key="chat-panel"
-            id="chat-panel"
-            aria-label={UI.chatTitle}
-            className={
-              isDesktop
-                ? "absolute left-4 top-20 bottom-4 z-20 flex w-[420px] xl:w-[440px] flex-col rounded-2xl glass"
-                : [
-                    // Non-fixed: App owns the bottom stack that holds this
-                    // drawer and the InfoPanel sheet above it.
-                    "flex w-full flex-col rounded-t-lg glass",
-                    expanded ? "max-h-[75vh]" : ""
-                  ].join(" ")
-            }
-            initial={{ opacity: 0, x: isDesktop ? -460 : 0, y: isDesktop ? 0 : "100%" }}
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, x: isDesktop ? -460 : 0, y: isDesktop ? 0 : "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.85 }}
-          >
-            {/* Round minimize handle on the inner (right) edge — half on, half
-                off the card. */}
-            {isDesktop && (
-              <motion.button
-                type="button"
-                ref={bindMinimizeChat}
-                onClick={() => setChatOpen(false)}
-                aria-expanded={true}
-                aria-controls="chat-panel"
-                aria-label={UI.hideChat}
-                title={UI.hideChat}
-                {...pressProps}
-                style={{ x: "50%", y: "-50%" }}
-                className="absolute right-0 top-1/2 z-10 flex h-8 w-8 sm:h-8.5 sm:w-8.5 items-center justify-center rounded-full glass text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent shadow-sm"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </motion.button>
-            )}
-            {handle}
-            {toolbar}
-            {/* Speech check — mounted only while visible so collapse resets the
-                armed test and the captured result. */}
-            {showToolbar && speechOpen && <SpeechCheckCard />}
-            {(isDesktop || expanded) && thread}
-            {cookChoices}
-            {intakeChoices}
-            {choiceGroup}
-            {composer}
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Voice-state announcements for screen readers (design §7) — kept
-          outside the presence swap so the live region never remounts. */}
-      <div aria-live="polite" className="sr-only">
-        {UI.ariaVoiceState[voiceState]}
+    <section aria-label={UI.chatTitle} id="chat-panel" className="conversation-panel">
+      {toolbar}
+      {speechOpen && <div className="shrink-0 max-h-56 overflow-y-auto"><SpeechCheckCard /></div>}
+      {thread}
+      <div className="conversation-actions">
+        {active && <ContextChoices onSendText={onSendText} />}
+        {composer}
       </div>
-    </>
+      <div aria-live="polite" className="sr-only">{UI.ariaVoiceState[voiceState]}</div>
+    </section>
   );
 }
