@@ -1,0 +1,259 @@
+[
+  {
+    "name": "Chicken Adobo",
+    "aliases": [
+      "adobo",
+      "adobong manok"
+    ],
+    "description": "Chicken simmered in a savoury, tangy sauce of soy sauce, vinegar, garlic and bay leaves.",
+    "estimated_total_minutes": 55,
+    "popularity": "Its bold, balanced sauce pairs beautifully with rice, and the dish is a familiar Filipino home-cooking favourite.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Chicken",
+      "Soy sauce",
+      "Vinegar",
+      "Garlic"
+    ],
+    "fit": "A comforting, rice-friendly meal with familiar pantry seasonings.",
+    "image_credit": "dbgg1979 on flickr",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Chicken_adobo.jpg",
+    "image_license": "CC BY 2.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/Chicken_adobo.jpg/960px-Chicken_adobo.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Sinigang",
+    "aliases": [],
+    "description": "A Filipino sour soup with tamarind, vegetables and a choice of protein.",
+    "estimated_total_minutes": 60,
+    "popularity": "The refreshing sour broth and generous vegetables make it a comforting shared meal.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Tamarind",
+      "Tomatoes",
+      "Leafy greens",
+      "Protein of choice"
+    ],
+    "fit": "A good starting point when you crave a tangy soup; protein can be adapted.",
+    "image_credit": "??? ??? from San Francisco, California, USA",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Sinigang_na_Baboy.jpg",
+    "image_license": "CC BY 2.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b1/Sinigang_na_Baboy.jpg/960px-Sinigang_na_Baboy.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Tinola",
+    "aliases": [
+      "chicken tinola",
+      "tinolang manok"
+    ],
+    "description": "A gentle ginger chicken soup with green papaya or chayote and leafy greens.",
+    "estimated_total_minutes": 45,
+    "popularity": "Its warming ginger broth and straightforward preparation make it a familiar comfort food.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Chicken",
+      "Ginger",
+      "Chayote",
+      "Leafy greens"
+    ],
+    "fit": "A warming option for someone in the mood for chicken and vegetables.",
+    "image_credit": "Obsidian Soul",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Chicken_tinola_with_green_papaya_and_lemongrass.jpg",
+    "image_license": "CC0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/56/Chicken_tinola_with_green_papaya_and_lemongrass.jpg/960px-Chicken_tinola_with_green_papaya_and_lemongrass.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Pancit",
+    "aliases": [
+      "pancit bihon"
+    ],
+    "description": "Stir-fried rice noodles tossed with vegetables and a choice of protein.",
+    "estimated_total_minutes": 35,
+    "popularity": "The colourful noodles are easy to share and are commonly served at Filipino celebrations.",
+    "difficulty": "Moderate",
+    "key_ingredients": [
+      "Rice noodles",
+      "Cabbage",
+      "Carrots",
+      "Soy sauce"
+    ],
+    "fit": "A flexible noodle meal that can use a variety of vegetables.",
+    "image_credit": "Obsidian Soul",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Pancit_bihon_1.jpg",
+    "image_license": "CC0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/41/Pancit_bihon_1.jpg/960px-Pancit_bihon_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Beef Kaldereta",
+    "aliases": [
+      "kaldereta",
+      "beef caldereta",
+      "caldereta"
+    ],
+    "description": "A rich tomato-based beef stew with potatoes, carrots and peppers.",
+    "estimated_total_minutes": 120,
+    "popularity": "Tender beef and a rich sauce make it a satisfying dish for family meals and gatherings.",
+    "difficulty": "Moderate",
+    "key_ingredients": [
+      "Beef",
+      "Tomatoes",
+      "Potatoes",
+      "Peppers"
+    ],
+    "fit": "A hearty choice when you have time for a slow simmer.",
+    "image_credit": "CNEcija12345",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Beef_Kaldereta_olives.jpg",
+    "image_license": "CC BY-SA 4.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/Beef_Kaldereta_olives.jpg/960px-Beef_Kaldereta_olives.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Garlic Fried Rice",
+    "aliases": [
+      "sinangag",
+      "garlic rice"
+    ],
+    "description": "Cooked rice quickly fried with golden garlic for a fragrant side or simple meal base.",
+    "estimated_total_minutes": 15,
+    "popularity": "It turns leftover rice into a fragrant accompaniment with very few ingredients.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Cooked rice",
+      "Garlic",
+      "Oil"
+    ],
+    "fit": "A quick pantry option if cooked rice is already available.",
+    "image_credit": "Joost Nusselder",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Sinangag_Recipe_(Garlic_Fried_Rice).jpg",
+    "image_license": "CC BY 2.0",
+    "image_url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/Sinangag_Recipe_%28Garlic_Fried_Rice%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+  },
+  {
+    "name": "Spaghetti Bolognese",
+    "aliases": [
+      "bolognese"
+    ],
+    "description": "Spaghetti served with a tomato and minced-meat sauce.",
+    "estimated_total_minutes": 60,
+    "popularity": "A rich sauce and familiar pasta make it a widely enjoyed family meal.",
+    "difficulty": "Moderate",
+    "key_ingredients": [
+      "Spaghetti",
+      "Minced meat",
+      "Tomatoes",
+      "Onion"
+    ],
+    "fit": "A filling pasta option when you want a rich, savoury sauce.",
+    "image_credit": "Andy Li",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Spaghetti_Bolognese_-_Figaros,_Brighton_2023-10-06.jpg",
+    "image_license": "CC0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Spaghetti_Bolognese_-_Figaros%2C_Brighton_2023-10-06.jpg/960px-Spaghetti_Bolognese_-_Figaros%2C_Brighton_2023-10-06.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Chicken Stir-Fry",
+    "aliases": [
+      "chicken stir fry"
+    ],
+    "description": "Small chicken pieces and colourful vegetables cooked quickly in a hot pan.",
+    "estimated_total_minutes": 25,
+    "popularity": "Quick cooking and flexible vegetables make it convenient for everyday dinners.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Chicken",
+      "Vegetables",
+      "Garlic",
+      "Soy sauce"
+    ],
+    "fit": "A fast meal that can use chicken and vegetables you already have.",
+    "image_credit": "Jon Sullivan",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Chicken_stir_fry.jpg",
+    "image_license": "Public domain",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e7/Chicken_stir_fry.jpg/960px-Chicken_stir_fry.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Vegetable Curry",
+    "aliases": [
+      "vegetarian curry"
+    ],
+    "description": "Vegetables simmered in a warmly spiced sauce, served with rice or flatbread.",
+    "estimated_total_minutes": 35,
+    "popularity": "Its adaptable vegetables and fragrant spices make it a satisfying meat-free meal.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Vegetables",
+      "Curry spices",
+      "Tomatoes",
+      "Coconut milk"
+    ],
+    "fit": "A flexible meat-free option; check the final ingredients against your restrictions.",
+    "image_credit": "Dolon Prova",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Mixed_vegetable_curry_2.jpg",
+    "image_license": "CC BY-SA 4.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Mixed_vegetable_curry_2.jpg/960px-Mixed_vegetable_curry_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Fried Rice",
+    "aliases": [
+      "egg fried rice",
+      "vegetable fried rice"
+    ],
+    "description": "Cooked rice stir-fried with vegetables, seasonings and optional egg or protein.",
+    "estimated_total_minutes": 20,
+    "popularity": "It is quick, customisable and a practical way to use leftover rice and vegetables.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Cooked rice",
+      "Vegetables",
+      "Oil",
+      "Seasonings"
+    ],
+    "fit": "A quick choice when you have leftover cooked rice.",
+    "image_credit": "ProjectManhattan",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Fried_rice.jpg",
+    "image_license": "CC BY-SA 3.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/50/Fried_rice.jpg/960px-Fried_rice.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Omelette",
+    "aliases": [
+      "omelet",
+      "vegetable omelette",
+      "cheese omelette"
+    ],
+    "description": "Beaten eggs cooked in a pan and folded around your choice of filling.",
+    "estimated_total_minutes": 15,
+    "popularity": "Few ingredients, quick cooking and flexible fillings make it useful for any meal.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Eggs",
+      "Oil or butter",
+      "Optional vegetables"
+    ],
+    "fit": "A fast option if you have eggs and want a small, flexible meal.",
+    "image_credit": "Renee Comet (photographer)",
+    "image_source": "https://commons.wikimedia.org/wiki/File:FoodOmelete.jpg",
+    "image_license": "Public domain",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b1/FoodOmelete.jpg/960px-FoodOmelete.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  },
+  {
+    "name": "Tomato Pasta",
+    "aliases": [
+      "pasta with tomato sauce",
+      "spaghetti with tomato sauce"
+    ],
+    "description": "Pasta tossed with a simple tomato, garlic and herb sauce.",
+    "estimated_total_minutes": 25,
+    "popularity": "Its familiar flavours and inexpensive pantry ingredients make it an accessible everyday meal.",
+    "difficulty": "Easy",
+    "key_ingredients": [
+      "Pasta",
+      "Tomatoes",
+      "Garlic",
+      "Olive oil"
+    ],
+    "fit": "A straightforward pasta choice built around pantry ingredients.",
+    "image_credit": "10Rosso",
+    "image_source": "https://commons.wikimedia.org/wiki/File:Pasta_al_pomodoro_2.jpg",
+    "image_license": "CC BY 2.0",
+    "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a8/Pasta_al_pomodoro_2.jpg/960px-Pasta_al_pomodoro_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+  }
+]

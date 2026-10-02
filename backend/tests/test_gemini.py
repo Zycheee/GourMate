@@ -101,3 +101,16 @@ def test_raw_upstream_error_is_logged_at_warning(caplog):
     assert any(record.levelno == logging.WARNING for record in caplog.records)
     assert "no longer available" in caplog.text
     assert "FakeUpstreamError" in caplog.text
+
+
+def test_pending_interview_answer_is_required_for_recommendations_only():
+    base = GeminiClient._gemini_tools()[0].function_declarations
+    pending = GeminiClient._gemini_tools("dietary")[0].function_declarations
+    original = next(tool for tool in base if tool.name == "offer_choices")
+    guarded = next(tool for tool in pending if tool.name == "offer_choices")
+    assert "answers" not in original.parameters.required
+    assert "answers" in guarded.parameters.required
+    assert guarded.parameters.properties["answers"].required == ["dietary"]
+    # Unrelated actions remain available, and global declarations are immutable.
+    assert next(tool for tool in pending if tool.name == "conversation_action").parameters.required == ["name"]
+    assert next(tool for tool in GeminiClient._gemini_tools()[0].function_declarations if tool.name == "offer_choices").parameters.required == original.parameters.required

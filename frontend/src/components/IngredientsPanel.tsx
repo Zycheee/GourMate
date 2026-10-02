@@ -15,6 +15,7 @@ import { UI } from "../lib/copy";
 
 export default function IngredientsPanel() {
   const recipe = useSession((s) => s.recipe);
+  const finished = useSession((s) => s.phase === "done");
   const [open, setOpen] = useState(false);
   const recipeId = recipe?.id ?? "";
   const [checked, setChecked] = useState<string[]>(() => loadChecked(recipeId));
@@ -32,23 +33,23 @@ export default function IngredientsPanel() {
       variants={fadeRise}
       initial="hidden"
       animate="show"
-      className="w-full rounded-lg glass shadow-warm transition-colors duration-layout ease-ui"
+      className={`w-full rounded-[24px] clay transition-colors duration-layout ease-ui ${finished ? "ingredients-finished" : ""}`}
     >
       <motion.button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         {...(open ? { "aria-controls": "cook-ingredients" } : {})}
-        {...pressProps}
-        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors duration-micro ease-ui hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset sm:px-6"
+        {...(finished ? { whileTap: pressProps.whileTap, transition: pressProps.transition } : pressProps)}
+        className={`ingredients-toggle flex h-9 w-full items-center justify-between gap-3 px-4 text-left transition-colors duration-micro ease-ui ${finished ? "" : "hover:bg-surface-2"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset`}
       >
-        <span className="font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">
+        <span className="font-mono text-11 uppercase tracking-[0.16em] text-ink-muted">
           {UI.plan.ingredients}
         </span>
         <ChevronDown
           aria-hidden="true"
           className={[
-            "h-4 w-4 shrink-0 text-ink-muted transition-transform duration-micro ease-ui",
+            "h-3.5 w-3.5 shrink-0 text-ink-muted transition-transform duration-micro ease-ui",
             open ? "rotate-180" : ""
           ].join(" ")}
         />
@@ -59,7 +60,7 @@ export default function IngredientsPanel() {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={spring}
-          className="flex flex-col border-t border-white/10 px-2 pb-3 pt-2 sm:px-3"
+          className="flex flex-col border-t border-black/5 dark:border-white/10 px-2 pb-2.5 pt-1.5"
         >
           {recipe.ingredients.map((ingredient) => {
             const isChecked = checked.includes(ingredient.id);
@@ -71,26 +72,21 @@ export default function IngredientsPanel() {
                   aria-checked={isChecked}
                   onClick={() => setChecked(toggleChecked(recipeId, ingredient.id))}
                   {...pressProps}
-                  className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors duration-micro ease-ui hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors duration-micro ease-ui hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <span
                     className={[
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors duration-micro ease-ui",
-                      isChecked ? "border-accent bg-accent" : "border-white/25 bg-surface-2"
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors duration-micro ease-ui",
+                      isChecked ? "border border-accent bg-accent" : "border border-black/20 dark:border-white/25 bg-surface-2"
                     ].join(" ")}
                   >
-                    <motion.span
-                      initial={false}
-                      animate={{ scale: isChecked ? 1 : 0, opacity: isChecked ? 1 : 0 }}
-                      transition={spring}
-                      className="flex items-center justify-center"
-                    >
-                      <Check className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+                    <motion.span initial={false} animate={{ scale: isChecked ? 1 : 0, opacity: isChecked ? 1 : 0 }} transition={spring} className="flex h-3 w-3 shrink-0 items-center justify-center">
+                      <Check size={12} className="h-3 w-3 shrink-0 text-white" aria-hidden="true" />
                     </motion.span>
                   </span>
                   <span
                     className={[
-                      "text-14 leading-relaxed transition-colors duration-micro ease-ui",
+                      "text-12 sm:text-13 leading-relaxed transition-colors duration-micro ease-ui truncate",
                       isChecked ? "text-ink-muted line-through" : "text-ink"
                     ].join(" ")}
                   >

@@ -1,27 +1,18 @@
-/**
- * theme.ts — model-derived accent palette (single source of truth).
- *
- * `MODEL_COLOR` is the avatar body orange (design §3). Every accent token in
- * the UI is derived from it through HSL so the chrome always matches the
- * character: `accent` (the model color itself), `accent-soft` (lighter tint),
- * `accent-strong` (darker shade), each with a `r g b` triple for CSS vars.
- * Also owns concrete theme resolution (`resolveTheme` / `useResolvedTheme`)
- * so the 3D canvas can paint the right surface color without reading the DOM.
- */
+/** Interface accents are independent of the avatar body color. */
 
 import { useEffect, useState } from "react";
 import { useSession } from "../store/session";
 import type { ThemePreference } from "../types";
 
-export const MODEL_COLOR = "#E0702A";
+export const MODEL_COLOR = "#FFB347";
 
 /** Concrete color scheme after `auto` resolution. */
 export type ResolvedTheme = "light" | "dark";
 
 /** Surface colors per resolved theme (keep in sync with `--bg` in index.css). */
 export const THEME_COLORS: Record<ResolvedTheme, string> = {
-  light: "#f7f3ec",
-  dark: "#141110"
+  light: "#F5EEDB",
+  dark: "#133020"
 };
 
 /** Resolve a theme preference to a concrete scheme (`auto` follows the OS). */
@@ -55,7 +46,7 @@ export function useResolvedTheme(): ResolvedTheme {
 }
 
 export interface AccentPalette {
-  /** Base model color (hex). */
+  /** Base interface accent (hex). */
   accent: string;
   /** `"r g b"` triple for `rgb(var(--accent-rgb) / a)`. */
   accentRgb: string;
@@ -143,13 +134,17 @@ export function deriveAccentPalette(base: string = MODEL_COLOR): AccentPalette {
 }
 
 /**
- * Publish the derived palette as CSS custom properties so Tailwind's
+ * Publish the interface brand palette as CSS custom properties so Tailwind's
  * `accent*` colors and the raw `var(--accent*)` hooks pick it up.
  */
 export function applyAccentTheme(
   root: HTMLElement = document.documentElement
 ): AccentPalette {
-  const p = deriveAccentPalette();
+  const p: AccentPalette = {
+    accent: "#FFB347", accentRgb: "255 179 71",
+    accentSoft: "#FFC370", accentSoftRgb: "255 195 112",
+    accentStrong: "#046241", accentStrongRgb: "4 98 65"
+  };
   root.style.setProperty("--accent", p.accent);
   root.style.setProperty("--accent-rgb", p.accentRgb);
   root.style.setProperty("--accent-soft", p.accentSoft);

@@ -31,8 +31,11 @@ from .llm.gemini import GeminiClient
 from .pipeline import Readiness, Services
 from .ratelimit import RateLimiters
 from .recipe.service import RecipeService
+from .recipe.photos import lookup_photo
 from .schemas import (
     GenerateRecipeRequest,
+    FoodImageRequest,
+    FoodImageResponse,
     HealthResponse,
     ParseRecipeRequest,
     Recipe,
@@ -151,10 +154,16 @@ async def _warmup(services: Services) -> None:
 
 router = APIRouter()
 
+
+@router.post("/api/food-images/lookup", response_model=FoodImageResponse)
+async def food_image_route(body: FoodImageRequest, request: Request) -> FoodImageResponse:
+    await enforce_recipe_rate_limit(request)
+    return await lookup_photo(body.dish)
+
 #: Fixed sample line spoken by the Settings "Preview voice" affordance. It is
 #: intentionally not user-supplied so the endpoint cannot be abused as a
 #: general-purpose TTS proxy.
-_TTS_PREVIEW_TEXT = "Hi, I'm ChefSight. Let's get cooking."
+_TTS_PREVIEW_TEXT = "Hi, I'm Kef. Let's get cooking."
 
 
 async def enforce_recipe_rate_limit(request: Request) -> None:
@@ -317,7 +326,7 @@ def create_app() -> FastAPI:
                     pass
             logger.info("application shutdown complete")
 
-    app = FastAPI(title="GourMate (ChefSight) API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="GourMate (Kef) API", version="1.0.0", lifespan=lifespan)
 
     allow_origins = settings.allowed_origins_list
     app.add_middleware(

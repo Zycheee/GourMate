@@ -1,0 +1,16 @@
+# Food photograph attributions
+
+Images retain their original licenses. Photos load from Wikimedia URLs and are not bundled. These licenses apply to the photographs, not the application code.
+
+- **Chicken Adobo** : dbgg1979 on flickr. [Source](https://commons.wikimedia.org/wiki/File:Chicken_adobo.jpg); [CC BY 2.0](https://creativecommons.org/licenses/by/2.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Sinigang** : ??? ??? from San Francisco, California, USA. [Source](https://commons.wikimedia.org/wiki/File:Sinigang_na_Baboy.jpg); [CC BY 2.0](https://creativecommons.org/licenses/by/2.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Tinola** : Obsidian Soul. [Source](https://commons.wikimedia.org/wiki/File:Chicken_tinola_with_green_papaya_and_lemongrass.jpg); [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Pancit** : Obsidian Soul. [Source](https://commons.wikimedia.org/wiki/File:Pancit_bihon_1.jpg); [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Beef Kaldereta** : CNEcija12345. [Source](https://commons.wikimedia.org/wiki/File:Beef_Kaldereta_olives.jpg); [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Garlic Fried Rice** : Joost Nusselder. [Source](https://commons.wikimedia.org/wiki/File:Sinangag_Recipe_(Garlic_Fried_Rice).jpg); [CC BY 2.0](https://creativecommons.org/licenses/by/2.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Spaghetti Bolognese** : Andy Li. [Source](https://commons.wikimedia.org/wiki/File:Spaghetti_Bolognese_-_Figaros,_Brighton_2023-10-06.jpg); [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Chicken Stir-Fry** : Jon Sullivan. [Source](https://commons.wikimedia.org/wiki/File:Chicken_stir_fry.jpg); [Public domain](https://creativecommons.org/publicdomain/mark/1.0/). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Vegetable Curry** : Dolon Prova. [Source](https://commons.wikimedia.org/wiki/File:Mixed_vegetable_curry_2.jpg); [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Fried Rice** : ProjectManhattan. [Source](https://commons.wikimedia.org/wiki/File:Fried_rice.jpg); [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Omelette** : Renee Comet (photographer). [Source](https://commons.wikimedia.org/wiki/File:FoodOmelete.jpg); [Public domain](https://creativecommons.org/publicdomain/mark/1.0/). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.
+- **Tomato Pasta** : 10Rosso. [Source](https://commons.wikimedia.org/wiki/File:Pasta_al_pomodoro_2.jpg); [CC BY 2.0](https://creativecommons.org/licenses/by/2.0). Wikimedia 800px thumbnail; cropped to fit the preview when displayed.

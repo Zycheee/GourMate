@@ -71,6 +71,24 @@ function rmsToUnit(buf: Uint8Array): number {
   return Math.min(1, Math.sqrt(sum / buf.length) * 3.2);
 }
 
+/**
+ * Extract speech volume and syllable dynamics for avatar lip-sync.
+ * Blends RMS (phoneme core) and peak transient (consonant attack) with gain
+ * so spoken words produce clear, lively 0.2..1.0 levels while speech pauses drop to 0.
+ */
+function speechLevelToUnit(buf: Uint8Array): number {
+  let sum = 0;
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = Math.abs((buf[i] - 128) / 128);
+    sum += v * v;
+    if (v > peak) peak = v;
+  }
+  const rms = Math.sqrt(sum / buf.length);
+  const combined = rms * 0.7 + peak * 0.3;
+  return Math.min(1, Math.max(0, combined * 4.8));
+}
+
 /* ------------------------------------------------------------------ */
 /* Shared AudioContext (resumed on user gesture)                       */
 /* ------------------------------------------------------------------ */
@@ -212,6 +230,8 @@ export class MicCapture {
   private pending: Float32Array[] = [];
   private pendingLength = 0;
   private handlers: MicCaptureHandlers;
+  private flushResolve: (() => void) | null = null;
+  private flushing: Promise<void> | null = null;
   private raf = 0;
   /**
    * Generation counter: every `start()`/`stop()` bumps it. An `await` inside
@@ -288,8 +308,8 @@ export class MicCapture {
           channelCountMode: "explicit"
         });
         node.port.onmessage = (event: MessageEvent) => {
-          const chunk = event.data as Float32Array;
-          this.enqueue(chunk);
+          if (event.data?.type === "flushed") { this.flushResolve?.(); return; }
+          if (event.data instanceof Float32Array) this.enqueue(event.data);
         };
         workletNode = node;
         processor = node;
@@ -483,9 +503,41 @@ export class MicCapture {
     levelState.micPeak = 0;
   }
 
+  /** Stop device capture first; flush only samples already recorded (§7). */
+  stopAndFlush(): Promise<void> {
+    if (this.flushing) return this.flushing;
+    this.startToken += 1;
+    const token = this.startToken;
+    this.stream?.getTracks().forEach(track => track.stop());
+    if (this.processor) this.processor.onaudioprocess = null;
+    const worklet = this.worklet;
+    this.flushing = (async () => {
+      if (worklet) {
+        await new Promise<void>(resolve => {
+          const timeout = window.setTimeout(resolve, 200);
+          this.flushResolve = () => { window.clearTimeout(timeout); resolve(); };
+          try { worklet.port.postMessage({ type: "flush" }); } catch { this.flushResolve(); }
+        });
+      }
+      if (token !== this.startToken) return;
+      if (this.pendingLength) {
+        const merged = new Float32Array(this.pendingLength);
+        let offset = 0;
+        for (const chunk of this.pending) { merged.set(chunk, offset); offset += chunk.length; }
+        const rate = this.ctx?.sampleRate ?? TARGET_RATE;
+        const pcm = rate === TARGET_RATE ? float32ToInt16(merged) : downsampleTo16kInt16(merged, rate);
+        for (let i = 0; i < pcm.length; i += FRAME_SAMPLES) this.handlers.onPcm(pcm.slice(i, i + FRAME_SAMPLES));
+      }
+      this.teardown();
+      this.handlers.onStatus?.("stopped");
+    })().finally(() => { this.flushResolve = null; this.flushing = null; });
+    return this.flushing;
+  }
+
   stop(): void {
     // Bump the token so any in-flight start() aborts and cleans up after itself.
     this.startToken += 1;
+    this.flushResolve?.();
     this.teardown();
     this.handlers.onStatus?.("stopped");
   }
@@ -502,13 +554,23 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+export interface TtsPlayerHandlers {
+  onEnded?: () => void;
+}
+
 export class TtsPlayer {
+  private generation = 0;
   private analyser: AnalyserNode | null = null;
   private gain: GainNode | null = null;
   private queue: { seq: number; bytes: Uint8Array }[] = [];
   private playing = false;
   private current: AudioBufferSourceNode | null = null;
   private raf = 0;
+  private handlers?: TtsPlayerHandlers;
+
+  constructor(handlers?: TtsPlayerHandlers) {
+    this.handlers = handlers;
+  }
 
   private ensureGraph(): AudioContext {
     const ctx = ensureAudioContext();
@@ -539,6 +601,7 @@ export class TtsPlayer {
 
   /** Barge-in / turn reset: stop playback immediately and clear the queue. */
   stop(): void {
+    this.generation++;
     this.queue = [];
     if (this.current) {
       try {
@@ -560,30 +623,38 @@ export class TtsPlayer {
     const next = this.queue.shift();
     if (!next) {
       levelState.mouth = 0;
+      levelState.mouthSmoothed = 0;
       this.stopLevelPump();
+      this.handlers?.onEnded?.();
       return;
     }
     const ctx = this.ensureGraph();
     const analyser = this.analyser;
+    const generation = this.generation;
     this.playing = true;
     this.startLevelPump();
     try {
       const copy = next.bytes.slice().buffer as ArrayBuffer;
       const audioBuffer = await ctx.decodeAudioData(copy);
+      if (generation !== this.generation) return;
       const src = ctx.createBufferSource();
       src.buffer = audioBuffer;
       if (analyser) src.connect(analyser);
       this.current = src;
       src.onended = () => {
+        if (generation !== this.generation) return;
         this.current = null;
         this.playing = false;
         void this.pump();
       };
       src.start();
     } catch {
+      if (generation !== this.generation) return;
       // tts_failed / audio_corrupt — degrade to text-only continuation.
       this.playing = false;
       this.current = null;
+      levelState.mouth = 0;
+      levelState.mouthSmoothed = 0;
       void this.pump();
     }
   }
@@ -592,10 +663,17 @@ export class TtsPlayer {
     if (this.raf) return;
     const tick = (): void => {
       const analyser = this.analyser;
-      if (analyser) {
+      if (analyser && this.playing) {
         analyser.getByteTimeDomainData(this.levelBuf);
-        levelState.mouth = rmsToUnit(this.levelBuf);
-        levelState.mouthSmoothed += (levelState.mouth - levelState.mouthSmoothed) * 0.35;
+        const target = speechLevelToUnit(this.levelBuf);
+        levelState.mouth = target;
+        // Asymmetric attack/release envelope:
+        // Snappy attack so mouth opens instantly with spoken phonemes, natural release during pauses
+        if (target > levelState.mouthSmoothed) {
+          levelState.mouthSmoothed += (target - levelState.mouthSmoothed) * 0.75;
+        } else {
+          levelState.mouthSmoothed += (target - levelState.mouthSmoothed) * 0.28;
+        }
       }
       this.raf = requestAnimationFrame(tick);
     };
@@ -607,8 +685,8 @@ export class TtsPlayer {
     this.raf = 0;
   }
 
-  /** fftSize 256 → frequencyBinCount 128. */
-  private levelBuf = new Uint8Array(128);
+  /** fftSize 256 time-domain buffer. */
+  private levelBuf = new Uint8Array(256);
 }
 
 /* ------------------------------------------------------------------ */

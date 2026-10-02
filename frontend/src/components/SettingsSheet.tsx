@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Play, Trash2, X } from "lucide-react";
+import SquishSwitch from "./SquishSwitch";
 import { useSession } from "../store/session";
 import { previewVoice } from "../lib/api";
 import { clearCookbook } from "../lib/cookbook";
-import { pressProps, spring } from "../lib/motion";
+import { pressProps } from "../lib/motion";
 import { UI, VOICES } from "../lib/copy";
 import type { ThemePreference } from "../types";
 
@@ -25,17 +26,19 @@ const APP_VERSION: string =
   (import.meta.env?.VITE_APP_VERSION as string | undefined) ?? "1.0.0";
 
 const SELECT_CLASS = [
-  // Bounded width (never `w-full`) so the select cannot overrun the Row label.
-  "min-h-[44px] w-[13rem] max-w-full rounded-md border border-white/10 bg-surface-2 px-4",
-  "text-16 text-ink focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/50"
+  "clay-field h-9 w-[11.5rem] max-w-full rounded-lg border border-black/10 dark:border-white/15",
+  "px-2.5 text-12 sm:text-13 font-medium text-ink",
+  "focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/50"
 ].join(" ");
 
-/** Small caps section heading shared by every group. */
+/** Apple-style small caps section heading with grouped container. */
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">{title}</h3>
-      {children}
+    <section className="flex flex-col gap-1.5">
+      <h3 className="px-1 font-mono text-11 uppercase tracking-[0.16em] text-ink-muted/80">{title}</h3>
+      <div className="flex flex-col rounded-xl border border-black/5 dark:border-white/10 bg-surface-2  px-3.5 py-2.5 divide-y divide-black/5 dark:divide-white/5 gap-2.5 clay-soft">
+        {children}
+      </div>
     </section>
   );
 }
@@ -43,58 +46,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** Shared row: label (+ optional hint) truncates, control pinned right. */
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex items-center justify-between gap-4 pt-1 first:pt-0">
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-16 text-ink">{label}</span>
-        {hint ? <span className="truncate text-12 text-ink-muted">{hint}</span> : null}
+        <span className="truncate text-13 sm:text-14 font-medium text-ink">{label}</span>
+        {hint ? <span className="truncate text-11 text-ink-muted">{hint}</span> : null}
       </span>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
   );
 }
 
-/**
- * Consistent switch with a 44px hit target around the visible track.
- * Explicit geometry: 28×48 track, 20px knob inset 4px on both ends, so the
- * knob never escapes the track (20px travel = `translate-x-5`).
- */
-function Switch({
-  checked,
-  onToggle,
-  label
-}: {
-  checked: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onToggle}
-      {...pressProps}
-      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-    >
-      <span
-        className={[
-          "relative block h-7 w-12 rounded-full transition-colors duration-micro ease-ui",
-          checked ? "bg-accent" : "bg-steel/40"
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform duration-micro ease-ui",
-            checked ? "translate-x-5" : "translate-x-0"
-          ].join(" ")}
-        />
-      </span>
-    </motion.button>
-  );
-}
-
-export default function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SettingsSheet({ open, onClose, onVoiceWakeChange }: { open: boolean; onClose: () => void; onVoiceWakeChange: (enabled: boolean) => void }) {
   const settings = useSession((s) => s.settings);
   const setSettings = useSession((s) => s.setSettings);
   const connection = useSession((s) => s.connection);
@@ -167,47 +129,52 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   ];
 
   return (
-    <motion.div
-      role="dialog"
-      aria-modal="true"
-      aria-label={UI.settings}
-      aria-hidden={!open}
-      animate={{ opacity: open ? 1 : 0 }}
-      transition={{ duration: 0.22, ease: "easeOut" }}
-      className={[
-        "fixed inset-0 z-50",
-        open ? "" : "pointer-events-none"
-      ].join(" ")}
-    >
-      <motion.div
-        className="absolute inset-0 bg-bg/70 backdrop-blur-sm"
-        onClick={onClose}
-        animate={{ opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.22, ease: "easeOut" }}
-      />
-      <motion.div
-        initial={{ y: "100%" }}
-        animate={{ y: open ? "0%" : "100%" }}
-        transition={spring}
-        className={[
-          "absolute inset-x-0 bottom-0 mx-auto flex max-h-[92vh] w-full max-w-lg flex-col",
-          "rounded-t-lg glass-strong shadow-warm-lg"
-        ].join(" ")}
-      >
-        <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
-          <h2 className="font-display text-20 text-ink">{UI.settings}</h2>
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="settings-backdrop-container"
+          role="dialog"
+          aria-modal="true"
+          aria-label={UI.settings}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+        >
+          <motion.div
+            className="absolute inset-0 bg-black/40 "
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          />
+          <motion.div
+            key="settings-modal"
+            initial={{ opacity: 0, scale: 0.93, y: 32 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 24 }}
+            transition={{ type: "spring", stiffness: 360, damping: 28, mass: 0.85 }}
+            className={[
+              "relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col",
+              "rounded-[24px] clay-strong overflow-hidden"
+            ].join(" ")}
+          >
+        <header className="flex items-center justify-between border-b border-black/5 dark:border-white/10 px-5 py-3 sm:px-6">
+          <h2 className="font-display text-16 sm:text-18 font-semibold text-ink">{UI.settings}</h2>
           <motion.button
             type="button"
             onClick={onClose}
             aria-label={UI.close}
             {...pressProps}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </motion.button>
         </header>
 
-        <div className="flex flex-col gap-5 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6">
           {/* ---------------- Voice & audio ---------------- */}
           <Section title={UI.sections.voiceAudio}>
             <Row label={UI.voice}>
@@ -225,25 +192,29 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
               </select>
             </Row>
 
-            <div>
+            <div className="pt-1">
               <motion.button
                 type="button"
                 onClick={runPreview}
                 disabled={previewPending}
                 aria-busy={previewPending}
                 {...pressProps}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-white/10 bg-surface-2 px-4 py-2.5 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/15 bg-surface dark:bg-surface-2 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent clay-soft disabled:pointer-events-none disabled:opacity-50"
               >
-                <Play className="h-4 w-4" aria-hidden="true" />
+                <Play className="h-3.5 w-3.5" aria-hidden="true" />
                 {UI.previewVoice}
               </motion.button>
               {previewFailed && (
-                <p role="status" className="mt-2 text-12 text-ember">
+                <p role="status" className="mt-1.5 text-11 text-ember">
                   {UI.previewUnavailable}
                 </p>
               )}
             </div>
 
+            <Row label="Voice wake" hint="Listen for Hey Kef while asleep">
+              <SquishSwitch checked={settings.voiceWake} onChange={onVoiceWakeChange} label="Voice wake" />
+            </Row>
+            <p className="text-11 text-ink-muted">Voice wake keeps the microphone on while Kef sleeps. Muting stops all listening.</p>
             <Row label={UI.microphone}>
               <select
                 value={settings.micDeviceId ?? ""}
@@ -261,19 +232,26 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
             </Row>
 
             <Row label={UI.timerSound}>
-              <Switch
+              <SquishSwitch
                 checked={settings.timerSound}
-                onToggle={() => setSettings({ timerSound: !settings.timerSound })}
-                label={UI.timerSound}
+                onChange={(checked) => setSettings({ timerSound: checked })}
+                ariaLabel={UI.timerSound}
+                width={50}
+                height={28}
+                radius={14}
+                trackColor="rgb(var(--steel-rgb) / 0.35)"
+                trackOnColor="var(--castleton-green)"
+                thumbColor="#ffffff"
+                thumbOnColor="#F5EEDB"
               />
             </Row>
           </Section>
 
           {/* ---------------- Appearance ---------------- */}
           <Section title={UI.sections.appearance}>
-            <div className="flex flex-col gap-2">
-              <span className="text-16 text-ink">{UI.theme}</span>
-              <div role="radiogroup" aria-label={UI.theme} className="flex gap-2">
+            <div className="flex flex-col gap-2 pt-0.5">
+              <span className="text-13 sm:text-14 font-medium text-ink">{UI.theme}</span>
+              <div role="radiogroup" aria-label={UI.theme} className="flex p-0.5 rounded-lg bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
                 {themes.map((t) => (
                   <motion.button
                     key={t.value}
@@ -283,11 +261,11 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                     onClick={() => setSettings({ theme: t.value })}
                     {...pressProps}
                     className={[
-                      "min-h-[44px] flex-1 rounded-md border px-4 text-14 font-medium transition-colors duration-micro ease-ui",
+                      "relative flex-1 py-1 px-3 text-12 sm:text-13 font-medium rounded-md transition-all duration-micro",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       settings.theme === t.value
-                        ? "border-accent bg-accent/12 text-ink"
-                        : "border-white/10 bg-surface-2 text-ink-muted hover:text-ink"
+                        ? "bg-surface text-ink clay-soft dark:bg-surface-2 clay-soft"
+                        : "text-ink-muted hover:text-ink"
                     ].join(" ")}
                   >
                     {t.label}
@@ -299,14 +277,14 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
 
           {/* ---------------- Data ---------------- */}
           <Section title={UI.sections.data}>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <motion.button
                 type="button"
                 onClick={confirming ? confirmClearCookbook : () => setConfirming(true)}
                 {...pressProps}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-ember/40 px-4 py-3 text-14 font-medium text-ember transition-colors duration-micro ease-ui hover:bg-ember/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+                className="inline-flex h-8 sm:h-8.5 items-center gap-1.5 rounded-lg border border-ember/30 bg-ember/5 px-3 py-1 text-12 sm:text-13 font-medium text-ember transition-colors duration-micro ease-ui hover:bg-ember/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember clay-soft"
               >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 {confirming ? UI.clearCookbookQuestion : UI.clearCookbook}
               </motion.button>
               {confirming && (
@@ -315,7 +293,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                     type="button"
                     onClick={confirmClearCookbook}
                     {...pressProps}
-                    className="inline-flex min-h-[44px] items-center rounded-md bg-ember px-4 py-3 text-14 font-medium text-white transition-colors duration-micro ease-ui hover:bg-ember/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg bg-ember px-3.5 py-1 text-12 sm:text-13 font-medium text-white dark:text-dark-serpent transition-colors duration-micro ease-ui hover:bg-ember/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember clay-soft"
                   >
                     {UI.confirm}
                   </motion.button>
@@ -323,7 +301,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                     type="button"
                     onClick={() => setConfirming(false)}
                     {...pressProps}
-                    className="inline-flex min-h-[44px] items-center rounded-md border border-white/10 bg-surface-2 px-4 py-3 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="inline-flex h-8 sm:h-8.5 items-center rounded-lg border border-black/10 dark:border-white/10 bg-surface dark:bg-surface-2 px-3 py-1 text-12 sm:text-13 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent clay-soft"
                   >
                     {UI.cancel}
                   </motion.button>
@@ -335,14 +313,16 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
           {/* ---------------- About ---------------- */}
           <Section title={UI.sections.about}>
             <Row label={UI.version}>
-              <span className="font-mono text-14 tabular-nums text-ink-muted">{APP_VERSION}</span>
+              <span className="font-mono text-12 tabular-nums text-ink-muted">{APP_VERSION}</span>
             </Row>
             <Row label={UI.connectionLabel}>
-              <span className="font-mono text-14 text-ink-muted">{connection}</span>
+              <span className="font-mono text-12 text-ink-muted">{connection}</span>
             </Row>
           </Section>
         </div>
       </motion.div>
     </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -34,6 +34,7 @@ from ..schemas import (
     StartEvent,
     SyncEvent,
     TextInputEvent,
+    ActionInputEvent,
     ToolResultEvent,
     VoiceState,
     parse_client_event,
@@ -165,6 +166,8 @@ class ServerSession:
     timers: list[KitchenTimer] = field(default_factory=list)
     turns: list[ChatTurn] = field(default_factory=list)
     muted: bool = False
+    sleeping: bool = False
+    wake_listening: bool = False
     assistant_speaking: bool = False
     voice_state: VoiceState = "idle"
     #: Per-session edge-tts voice, seeded from ``TTS_VOICE`` and overridable via
@@ -195,6 +198,8 @@ class Session:
         self._registry = registry
         self.state = ServerSession(
             session_id=str(uuid.uuid4()),
+            sleeping=True,
+            muted=True,
             tts_voice=services.settings.tts_voice,
             audio=AudioRingBuffer(
                 max_buffer_s=services.settings.max_buffer_s,
@@ -298,6 +303,7 @@ class Session:
             except Exception:  # noqa: BLE001
                 pass
         finally:
+            await self._pipeline.shutdown()
             if registered:
                 await self._registry.release(self)
             await self._services.limiters.session.forget(self.state.session_id)
@@ -369,9 +375,11 @@ class Session:
 
     async def _dispatch(self, event: Any) -> None:
         if isinstance(event, TextInputEvent):
-            await self._pipeline.handle_text_input(event.text)
+            await self._pipeline.start_text_input(event.text)
+        elif isinstance(event, ActionInputEvent):
+            await self._pipeline.start_action(event.action)
         elif isinstance(event, ToolResultEvent):
-            await self._pipeline.handle_tool_result(event.call_id, event.result)
+            await self._pipeline.start_tool_result(event.call_id, event.result)
         elif isinstance(event, ControlEvent):
             await self._handle_control(event)
         elif isinstance(event, SyncEvent):
@@ -386,11 +394,32 @@ class Session:
 
     async def _handle_control(self, event: ControlEvent) -> None:
         if event.action == "mute":
+            wake_only = self.state.sleeping and self.state.wake_listening
             self.state.muted = True
+            self.state.wake_listening = False
+            if event.pending_audio == "submit":
+                await self._pipeline.submit_input(event.utterance_id, wake_only=wake_only)
+            else:
+                await self._pipeline.discard_input()
+            await self.send_event(protocol.activity(self.state.sleeping, False, True))
             logger.debug("session %s muted", self.state.session_id)
         elif event.action == "unmute":
-            self.state.muted = False
+            self.state.wake_listening = self.state.sleeping
+            self.state.muted = self.state.sleeping
+            await self.send_event(protocol.activity(self.state.sleeping, self.state.wake_listening, self.state.muted))
             logger.debug("session %s unmuted", self.state.session_id)
+        elif event.action == "sleep":
+            await self._pipeline.discard_input(cancel_reply=True)
+            self.state.sleeping = True
+            self.state.muted = True
+            self.state.wake_listening = bool(event.wake_listening)
+            await self.send_event(protocol.activity(True, self.state.wake_listening, True))
+        elif event.action == "wake":
+            self.state.sleeping = False
+            self.state.wake_listening = False
+            if event.enable_mic:
+                self.state.muted = False
+            await self.send_event(protocol.activity(False, False, self.state.muted))
         elif event.action == "barge_in":
             await self._pipeline.cancel_speaking()
         elif event.action == "set_voice":
@@ -412,6 +441,7 @@ class Session:
 
     def _apply_sync(self, state: SessionState) -> None:
         """Rebuild context from a client ``sync`` payload (reconnect)."""
+        self._pipeline.clear_pending_actions()
         self.state.phase = state.phase
         self.state.recipe = state.recipe
         self.state.current_step_index = state.current_step_index
@@ -427,6 +457,10 @@ class Session:
         )
 
     def _apply_recipe_state(self, event: RecipeStateEvent) -> None:
+        if ((event.recipe is not None and self.state.recipe != event.recipe)
+                or (event.current_step_index is not None and event.current_step_index != self.state.current_step_index)
+                or (event.phase is not None and event.phase != self.state.phase)):
+            self._pipeline.clear_pending_actions()
         if event.recipe is not None:
             self.state.recipe = event.recipe
         if event.current_step_index is not None:

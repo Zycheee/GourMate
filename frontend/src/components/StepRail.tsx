@@ -15,7 +15,7 @@ export default function StepRail() {
 
   return (
     <div className="w-full">
-      <p className="font-mono text-12 uppercase tracking-[0.18em] text-ink-muted tabular-nums">
+      <p className="font-mono text-11 uppercase tracking-[0.18em] text-ink-muted tabular-nums">
         {UI.stepOf(currentStepIndex + 1, total)}
       </p>
       <ol
@@ -34,7 +34,7 @@ export default function StepRail() {
                   "block rounded-full transition-all duration-state ease-ui",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   active
-                    ? "h-3 w-3 bg-accent ring-2 ring-accent/40 ring-offset-2 ring-offset-bg"
+                    ? "h-3 w-3 clay-soft bg-accent ring-2 ring-accent/40 ring-offset-2 ring-offset-bg"
                     : done
                       ? "h-2.5 w-2.5 bg-tallow/80"
                       : "h-2.5 w-2.5 bg-steel/35"

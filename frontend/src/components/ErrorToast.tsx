@@ -54,20 +54,20 @@ export default function ErrorToast({ onRetry }: { onRetry?: () => void }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -10, scale: 0.97 }}
           transition={spring}
-          className="mx-auto flex w-full max-w-xl items-start gap-3 rounded-md glass px-5 py-4 shadow-warm"
+          className="mx-auto flex w-full max-w-xl items-start gap-3 rounded-[24px] clay px-4 py-3 clay"
         >
           {toast.kind === "info" ? (
-            <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+            <Check className="mt-0.5 h-4.5 w-4.5 shrink-0 text-accent" aria-hidden="true" />
           ) : (
             <AlertCircle
-              className={`mt-0.5 h-5 w-5 shrink-0 ${toast.kind === "rate_limit" ? "text-tallow" : "text-steel"}`}
+              className={`mt-0.5 h-4.5 w-4.5 shrink-0 ${toast.kind === "rate_limit" ? "text-tallow" : "text-steel"}`}
               aria-hidden="true"
             />
           )}
           <div className="flex-1">
-            <p className="text-16 text-ink">{toast.message}</p>
+            <p className="text-13 sm:text-14 leading-snug text-ink">{toast.message}</p>
             {countdown !== null && countdown > 0 && (
-              <p className="mt-1 font-mono text-12 text-ink-muted tabular-nums">
+              <p className="mt-0.5 font-mono text-11 text-ink-muted tabular-nums">
                 {countdown}s
               </p>
             )}
@@ -76,7 +76,7 @@ export default function ErrorToast({ onRetry }: { onRetry?: () => void }) {
                 type="button"
                 onClick={onRetry}
                 {...pressProps}
-                className="mt-2 rounded-sm text-14 font-medium text-accent-strong underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:text-accent"
+                className="mt-1.5 rounded text-12 font-medium text-accent-strong underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent dark:text-accent"
               >
                 {UI.retry}
               </motion.button>
@@ -87,9 +87,9 @@ export default function ErrorToast({ onRetry }: { onRetry?: () => void }) {
             onClick={() => setToast(null)}
             aria-label={UI.dismiss}
             {...pressProps}
-            className="rounded-sm p-1.5 text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-black/5 dark:hover:bg-white/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </motion.button>
         </motion.div>
       )}

@@ -182,10 +182,23 @@ class GeminiClient:
 
     # -- content building --------------------------------------------------
     @staticmethod
-    def _gemini_tools() -> list[Any]:
+    def _gemini_tools(pending_preference: str | None = None, *, contextual_actions: bool = False) -> list[Any]:
         from google.genai import types  # type: ignore[import-not-found]
 
-        declarations = [types.FunctionDeclaration(**decl) for decl in TOOL_DECLARATIONS]
+        from copy import deepcopy
+        schemas = deepcopy(TOOL_DECLARATIONS)
+        if contextual_actions:
+            # Navigation is a contextual action, like start/confirm/finish.
+            # Low-level navigation tools remain canonical for client execution.
+            schemas = [tool for tool in schemas if tool["name"] not in {"advance_step", "repeat_step", "go_to_step"}]
+        if pending_preference in {"cravings", "dietary", "ingredients", "time"}:
+            # Recommendations cannot omit the current interview answer. Other
+            # actions remain available for unrelated requests or cancellation.
+            choices = next(tool for tool in schemas if tool["name"] == "offer_choices")
+            parameters = choices["parameters"]
+            parameters["required"] = [*parameters["required"], "answers"]
+            parameters["properties"]["answers"]["required"] = [pending_preference]
+        declarations = [types.FunctionDeclaration(**decl) for decl in schemas]
         return [types.Tool(function_declarations=declarations)]
 
     @staticmethod
@@ -266,6 +279,7 @@ class GeminiClient:
         user_text: str | None,
         recipe_context: str | None = None,
         system_prompt: str | None = None,
+        pending_preference: str | None = None,
     ) -> AsyncIterator[GeminiStreamEvent]:
         """Stream one conversational turn.
 
@@ -283,9 +297,9 @@ class GeminiClient:
         contents = self._build_contents(history, user_text)
         config = types.GenerateContentConfig(
             system_instruction=self._system_instruction(recipe_context, system_prompt),
-            tools=self._gemini_tools(),
-            temperature=0.6,
-            max_output_tokens=600,
+            tools=self._gemini_tools(pending_preference, contextual_actions=True),
+            temperature=0.2,
+            max_output_tokens=1600,
         )
         try:
             stream = await asyncio.wait_for(

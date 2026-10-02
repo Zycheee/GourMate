@@ -1,10 +1,68 @@
 {
-  "$comment": "Golden wire-contract manifest for GourMate (ChefSight). Mirrors backend/app/schemas.py and frontend/src/types.ts. Both backend/tests/test_protocol.py and frontend/src/__tests__/types.contract.test.ts load this file and fail on drift.",
-  "version": "1.0.0",
+  "$comment": "Golden wire-contract manifest for GourMate (Kef). Mirrors backend/app/schemas.py and frontend/src/types.ts. Both backend/tests/test_protocol.py and frontend/src/__tests__/types.contract.test.ts load this file and fail on drift.",
+  "version": "1.4.0",
+  "choice_option": {
+    "required": [
+      "id",
+      "label"
+    ],
+    "optional": [
+      "submit_text",
+      "food",
+      "action"
+    ]
+  },
+  "food_preview": {
+    "required": [
+      "name",
+      "description",
+      "estimated_total_minutes",
+      "popularity",
+      "difficulty",
+      "key_ingredients",
+      "fit"
+    ],
+    "optional": [
+      "image_url",
+      "image_credit",
+      "image_source",
+      "image_license"
+    ],
+    "difficulty": [
+      "Easy",
+      "Moderate",
+      "Advanced"
+    ]
+  },
+  "offer_choices_args": {
+    "required": [
+      "options"
+    ],
+    "optional": [
+      "foods",
+      "question",
+      "actions",
+      "answers",
+      "servings"
+    ]
+  },
+  "food_image_lookup": {
+    "endpoint": "/api/food-images/lookup",
+    "method": "POST",
+    "request_required": [
+      "dish"
+    ],
+    "response_required": [
+      "image_url",
+      "image_credit",
+      "image_source",
+      "image_license"
+    ]
+  },
   "source": "backend/app/schemas.py",
   "transport": {
     "ws_endpoint": "/ws/session",
-    "binary_frame": "Int16 PCM, 16 kHz mono, 20-40 ms frames"
+    "binary_frame": "Int16 PCM, 16 kHz mono, 20-40 ms frames; final flush may contain a shorter even-length tail"
   },
   "client_to_server": [
     "start",
@@ -12,7 +70,8 @@
     "control",
     "text_input",
     "tool_result",
-    "recipe_state"
+    "recipe_state",
+    "action_input"
   ],
   "server_to_client": [
     "ready",
@@ -29,7 +88,8 @@
     "done",
     "error",
     "rate_limited",
-    "turn_end"
+    "turn_end",
+    "activity"
   ],
   "session_phases": [
     "intake",
@@ -46,7 +106,8 @@
     "substitute_ingredient",
     "begin_dish",
     "create_plan",
-    "offer_choices"
+    "offer_choices",
+    "conversation_action"
   ],
   "error_codes": [
     "out_of_scope",
@@ -80,7 +141,9 @@
     "mute",
     "unmute",
     "barge_in",
-    "set_voice"
+    "set_voice",
+    "sleep",
+    "wake"
   ],
   "close_codes": {
     "normal": 1000,
@@ -94,5 +157,74 @@
     "llm_rate": 502,
     "llm_config": 502,
     "engine_loading": 503
-  }
+  },
+  "activity": {
+    "required": [
+      "sleeping",
+      "wake_listening",
+      "muted"
+    ]
+  },
+  "control_optional": [
+    "voice",
+    "wake_listening",
+    "enable_mic",
+    "pending_audio",
+    "utterance_id"
+  ],
+  "reply_identity": {
+    "optional_field": "turn_id",
+    "events": [
+      "assistant_text",
+      "assistant_audio",
+      "choices",
+      "state"
+    ]
+  },
+  "action_names": [
+    "start_cooking",
+    "approve_plan",
+    "cook_now",
+    "plan_together",
+    "discover",
+    "update_preferences",
+    "suggest_now",
+    "change_preferences",
+    "confirm",
+    "decline",
+    "finish",
+    "reset",
+    "skip_to_step",
+    "advance_step",
+    "repeat_step",
+    "go_to_step",
+    "select_dish",
+    "ask_help",
+    "parse_recipe"
+  ],
+  "conversation_action": {
+    "required": [
+      "name"
+    ],
+    "optional": [
+      "value",
+      "step_index",
+      "servings",
+      "answers",
+      "options",
+      "foods",
+      "question"
+    ]
+  },
+  "utterance_identity": {
+    "optional_field": "utterance_id",
+    "events": [
+      "vad",
+      "transcript"
+    ]
+  },
+  "pending_audio_policies": [
+    "submit",
+    "discard"
+  ]
 }

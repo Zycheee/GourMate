@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from app.schemas import ConversationAction
+
 import pytest
 
 from app.config import Settings
@@ -36,6 +38,9 @@ from tests.factories import make_ingredient, make_recipe, make_step
 
 
 class _StubVAD:
+    def reset(self) -> None:
+        pass
+
     def mark_assistant_speaking(self, flag: bool) -> None:  # noqa: ANN001
         return None
 
@@ -115,6 +120,9 @@ class _State:
     def __init__(self) -> None:
         self.session_id = "session-1"
         self.phase = "intake"
+        self.sleeping = False
+        self.wake_listening = False
+        self.muted = True
         self.recipe = None
         self.current_step_index = 0
         self.turns: list = []
@@ -246,7 +254,7 @@ async def test_direct_cook_choice_generates_speaks_eta_and_starts_cooking():
     pipeline = _pipeline(session, gemini=gemini, recipes=recipes)
 
     await pipeline._respond("chicken adobo", from_voice=False)
-    await pipeline._respond("cook it straight away", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="cook_now"))
 
     assert recipes.generate_calls == [("chicken adobo", None, None)]
     recipe_events = [e for e in session.events if e["type"] == "recipe"]
@@ -278,7 +286,7 @@ async def test_plan_first_choice_runs_the_planning_interview():
                     call_id="call_dish",
                 )
             ],
-            [TextDelta("How many servings are you cooking for?")],
+            [FunctionCallEvent(name="conversation_action", arguments={"name": "plan_together"}, call_id="plan_together")],
         ]
     )
     recipes = _FakeRecipes(_plan_recipe())
@@ -304,7 +312,7 @@ async def test_plan_first_choice_runs_the_planning_interview():
 
 
 async def test_suggestion_request_routes_to_offer_choices_not_dish_choice():
-    """A "what should I cook?" ask runs planning and emits tappable choices.
+    """Discovery interviews first, then emits preview choices without generation.
 
     It must NOT be mistaken for a dish name (which would ask the
     cook-now/plan-it question), and the server-executed ``offer_choices`` tool
@@ -314,7 +322,7 @@ async def test_suggestion_request_routes_to_offer_choices_not_dish_choice():
         [
             FunctionCallEvent(
                 name="offer_choices",
-                arguments={"options": ["Chicken Adobo", "Sinigang", "Kare-kare"]},
+                arguments={"options": ["Chicken Adobo", "Sinigang", "Tinola"]},
                 call_id="call_choices",
             )
         ]
@@ -323,7 +331,11 @@ async def test_suggestion_request_routes_to_offer_choices_not_dish_choice():
     session = _FakeSession()
     pipeline = _pipeline(session, gemini=gemini, recipes=recipes)
 
-    await pipeline._respond("what should I cook", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="discover"))
+    assert gemini.calls == []
+    assert session.state.recipe is None
+    session.events.clear()
+    await pipeline.execute_action(ConversationAction(name="suggest_now"))
 
     types = session.types()
     choices = [event for event in session.events if event["type"] == "choices"]
@@ -331,13 +343,17 @@ async def test_suggestion_request_routes_to_offer_choices_not_dish_choice():
     assert [option["label"] for option in choices[0]["options"]] == [
         "Chicken Adobo",
         "Sinigang",
-        "Kare-kare",
+        "Tinola",
+        "Show other dishes",
+        "Change my preferences",
     ]
     # Ids are slugified labels (tappable chips).
     assert [option["id"] for option in choices[0]["options"]] == [
-        "chicken_adobo",
-        "sinigang",
-        "kare_kare",
+        "chicken_adobo_0",
+        "sinigang_1",
+        "tinola_2",
+        "other_dishes",
+        "change_preferences",
     ]
     # It is a suggestion, not a dish intake: no pending dish, no choice question.
     assert pipeline._pending_dish == ""
@@ -345,7 +361,8 @@ async def test_suggestion_request_routes_to_offer_choices_not_dish_choice():
     assert session.state.recipe is None
     spoken = " ".join(session.tts.synthesized)
     assert "cook it straight away" not in spoken
-    assert "Chicken Adobo" in spoken and "or Kare-kare" in spoken
+    assert "Which dish would you like to explore?" in spoken
+    assert all(option.get("food") for option in choices[0]["options"][:3])
     # The planning conversation ran exactly once (no second Gemini round-trip).
     assert len(gemini.calls) == 1
     assert gemini.calls[0]["system_prompt"] is PLANNING_PROMPT
@@ -425,7 +442,7 @@ async def test_start_confirmation_flips_to_cooking_with_step_one():
     session.state.recipe = recipe
     session.state.phase = "planning"
 
-    await pipeline._respond("let's cook", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="start_cooking"))
 
     types = session.types()
     recipe_events = [event for event in session.events if event["type"] == "recipe"]
@@ -456,7 +473,7 @@ async def test_cancel_during_planning_resets_to_intake():
     session.state.phase = "planning"
     pipeline._pending_dish = "chicken adobo"
 
-    await pipeline._respond("cancel the plan", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     assert "reset" in session.types()
     assert session.state.recipe is None
@@ -486,7 +503,7 @@ async def test_cancel_during_interview_resets_to_intake():
 
     await pipeline._respond("chicken adobo", from_voice=False)  # begin_dish asks the choice
     assert pipeline._awaiting_choice is True
-    await pipeline._respond("never mind", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     assert "reset" in session.types()
     assert session.state.recipe is None
@@ -507,7 +524,7 @@ async def test_discontinue_during_cooking_resets_to_intake():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("stop cooking", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     assert "reset" in session.types()
     assert session.state.recipe is None
@@ -537,43 +554,10 @@ async def test_stop_the_timer_is_not_discontinue():
     assert len(gemini.calls) == 1
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "cook it now",
-        "cook it straight away",
-        "just cook",
-        "straight away",
-        "go ahead and cook",
-        "cook it",
-    ],
-)
-def test_direct_cook_detector_recognizes_commands(text):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_direct_cook(text) is True
-    assert pipeline._is_plan_first(text) is False
 
 
-@pytest.mark.parametrize(
-    "text",
-    ["plan it", "let's plan", "plan it together", "ask me", "what do I have"],
-)
-def test_plan_first_detector_recognizes_commands(text):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_plan_first(text) is True
-    assert pipeline._is_direct_cook(text) is False
 
 
-def test_discontinue_detector_excludes_timer_intents():
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_discontinue("stop cooking") is True
-    assert pipeline._is_discontinue("discontinue") is True
-    assert pipeline._is_discontinue("quit") is True
-    assert pipeline._is_discontinue("abandon") is True
-    assert pipeline._is_discontinue("stop the cook") is True
-    # Timer management belongs to the tool path, never to discontinue.
-    assert pipeline._is_discontinue("stop the timer") is False
-    assert pipeline._is_discontinue("cancel the timer") is False
 
 
 # ---------------------------------------------------------------------------
@@ -643,7 +627,10 @@ async def test_revision_during_planning_regenerates_via_planning_prompt():
     await pipeline._respond("can you make it without soy", from_voice=True)
 
     assert session.state.phase == "planning"
-    assert recipes.generate_calls == [("chicken adobo", None, "no soy")]
+    assert len(recipes.generate_calls) == 1
+    dish, servings, constraints = recipes.generate_calls[0]
+    assert dish == "chicken adobo" and servings is None
+    assert "no soy" in constraints
     assert gemini.calls[0]["system_prompt"] is PLANNING_PROMPT
 
 
@@ -677,7 +664,10 @@ async def test_create_plan_after_reconnect_falls_back_to_recipe_title():
     await pipeline._respond("can you make it without soy", from_voice=True)
 
     # Regenerated from the existing title, not from an empty dish.
-    assert recipes.generate_calls == [("Chicken Adobo", None, "no soy")]
+    assert len(recipes.generate_calls) == 1
+    dish, servings, constraints = recipes.generate_calls[0]
+    assert dish == "Chicken Adobo" and servings is None
+    assert "no soy" in constraints
     plan_events = [event for event in session.events if event["type"] == "plan"]
     assert len(plan_events) == 1
     assert session.state.phase == "planning"
@@ -700,7 +690,10 @@ async def test_next_on_last_step_completes_and_congratulates():
     session.state.phase = "cooking"
     session.state.current_step_index = 1  # last step
 
-    await pipeline._respond("what's next", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="advance_step"))
+    assert "done" not in session.types()
+    assert session.state.phase == "cooking"
+    await pipeline.execute_action(ConversationAction(name="confirm"))
 
     types = session.types()
     assert "done" in types
@@ -727,52 +720,12 @@ async def test_next_on_last_step_completes_and_congratulates():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "cue",
-    [
-        "i'm done",
-        "im done",
-        "i am done",
-        "finished",
-        "done cooking",
-        "that's it",
-        "all done",
-        "i'm done with it",
-        "i'm done with that",
-        "finished with it",
-        "i'm finished with that",
-    ],
-)
-def test_done_cue_detector(cue):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_done_cue(cue) is True
 
 
-@pytest.mark.parametrize(
-    "affirmative",
-    ["yes", "yeah", "yep", "sure", "i'm done", "i am done", "Yes, I'm done", "yes I'm done"],
-)
-def test_affirmative_detector_recognizes_the_completion_chip(affirmative):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_affirmative(affirmative) is True
-    assert pipeline._is_negative(affirmative) is False
 
 
-def test_affirmative_detector_rejects_negatives_and_freeform():
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_affirmative("i'm not done") is False
-    assert pipeline._is_affirmative("not yet") is False
-    assert pipeline._is_affirmative("what's next") is False
-    assert pipeline._is_affirmative("") is False
 
 
-def test_done_cue_detector_ignores_timers_and_unrelated():
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    # A timer utterance must never be read as a done cue.
-    assert pipeline._is_done_cue("i'm done with the timer") is False
-    assert pipeline._is_done_cue("stop the timer") is False
-    assert pipeline._is_done_cue("what's next") is False
-    assert pipeline._is_done_cue("") is False
 
 
 async def test_done_cue_asks_confirmation_then_yes_completes():
@@ -785,7 +738,7 @@ async def test_done_cue_asks_confirmation_then_yes_completes():
     session.state.phase = "cooking"
     session.state.current_step_index = 1  # last step
 
-    await pipeline._respond("i'm done", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="finish"))
 
     types = session.types()
     # First turn: confirm via choices; the recipe is NOT finished yet.
@@ -794,13 +747,13 @@ async def test_done_cue_asks_confirmation_then_yes_completes():
     assert len(choices) == 1
     assert [option["label"] for option in choices[0]["options"]] == [
         "Yes, I'm done",
-        "Not yet",
+        "Keep cooking",
     ]
     assert pipeline._awaiting_done_confirm is True
     assert session.state.phase == "cooking"
     assert "Ready to finish?" in " ".join(session.tts.synthesized)
 
-    await pipeline._respond("yes", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="confirm"))
 
     types = session.types()
     assert "done" in types
@@ -823,11 +776,11 @@ async def test_done_cue_chip_label_yes_im_done_completes():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("i'm done", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="finish"))
     assert pipeline._awaiting_done_confirm is True
 
     # The chip label is itself a valid affirmative answer.
-    await pipeline._respond("Yes, I'm done", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="confirm"))
 
     types = session.types()
     assert "done" in types
@@ -854,7 +807,7 @@ async def test_done_cue_with_trailing_words_asks_confirmation():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("i'm done with it", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="finish"))
 
     types = session.types()
     assert "done" not in types
@@ -862,7 +815,7 @@ async def test_done_cue_with_trailing_words_asks_confirmation():
     assert len(choices) == 1
     assert [option["label"] for option in choices[0]["options"]] == [
         "Yes, I'm done",
-        "Not yet",
+        "Keep cooking",
     ]
     assert pipeline._awaiting_done_confirm is True
     assert session.state.phase == "cooking"
@@ -879,8 +832,8 @@ async def test_done_cue_not_yet_keeps_cooking():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("i'm done", from_voice=True)
-    await pipeline._respond("Not yet", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="finish"))
+    await pipeline.execute_action(ConversationAction(name="decline"))
 
     types = session.types()
     assert "done" not in types
@@ -903,11 +856,11 @@ async def test_stop_cooking_still_resets_even_though_done_cue_exists():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("stop cooking", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     types = session.types()
     assert "reset" in types
-    assert "choices" not in types
+    assert "choices" in types  # offer a fresh intake action after reset
     assert session.state.recipe is None
     assert session.state.phase == "intake"
     assert pipeline._awaiting_done_confirm is False
@@ -927,21 +880,21 @@ async def test_timer_utterance_is_not_a_done_cue():
     await pipeline._respond("stop the timer", from_voice=True)
 
     types = session.types()
-    assert "choices" not in types
+    assert "choices" in types  # contextual follow-ups, not completion choices
     assert "done" not in types
     assert "reset" not in types
     assert pipeline._awaiting_done_confirm is False
     assert len(gemini.calls) == 1
 
 
-async def test_offer_choices_ignored_during_cooking():
-    """A stray offer_choices mid-cook is ignored; the normal reply still runs."""
+async def test_offer_choices_allowed_during_cooking():
+    """Cooking follow-up choices cannot replace the active recipe."""
     recipe = _plan_recipe()
     gemini = _ScriptedGemini(
         [
             FunctionCallEvent(
                 name="offer_choices",
-                arguments={"options": ["Adobo", "Sinigang"]},
+                arguments={"options": ["Repeat this step", "Next step"], "question": "Keep simmering. What would you like next?"},
                 call_id="call_cook_choices",
             ),
             TextDelta("We're on step 2 - keep simmering."),
@@ -957,13 +910,13 @@ async def test_offer_choices_ignored_during_cooking():
     await pipeline._respond("how is it going", from_voice=True)
 
     types = session.types()
-    assert "choices" not in types
+    assert "choices" in types
     assert session.state.recipe is recipe
     assert session.state.phase == "cooking"
     spoken = "".join(
         event["text"] for event in session.events if event["type"] == "assistant_text"
     )
-    assert "keep simmering" in spoken
+    assert "keep simmering" in spoken.lower()
     assert types[-1] == "turn_end"
 
 
@@ -980,7 +933,7 @@ async def test_after_done_whats_next_offers_a_new_dish_not_replay():
     session.state.phase = "done"
     session.state.current_step_index = 1
 
-    await pipeline._respond("what's next", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="discover"))
 
     types = session.types()
     # No second completion event and no final-step replay.
@@ -988,9 +941,11 @@ async def test_after_done_whats_next_offers_a_new_dish_not_replay():
     assert "tool_call" not in types
     spoken = " ".join(session.tts.synthesized)
     assert "Simmer the sauce." not in spoken
-    # Routed to the companion/suggestion prompt instead of navigation.
-    assert len(gemini.calls) == 1
-    assert gemini.calls[0]["system_prompt"] is PLANNING_PROMPT
+    # A new discovery begins; interview missing preferences before suggesting.
+    assert session.state.phase == "intake"
+    assert "reset" in types
+    assert gemini.calls == []
+    assert pipeline._discovery.pending == "cravings"
     assert types[-1] == "turn_end"
 
 
@@ -1013,10 +968,11 @@ async def test_cancel_or_discontinue_during_done_resets_to_intake(utterance):
     session.state.current_step_index = 1  # last step
 
     # Reach the done phase through the normal completion path.
-    await pipeline._respond("what's next", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="advance_step"))
+    await pipeline.execute_action(ConversationAction(name="confirm"))
     assert session.state.phase == "done"
 
-    await pipeline._respond(utterance, from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     types = session.types()
     assert "reset" in types
@@ -1043,14 +999,14 @@ async def test_non_cancel_during_done_still_routes_to_suggestions():
     session.state.phase = "done"
     session.state.current_step_index = 1
 
-    await pipeline._respond("what should I cook next", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="discover"))
 
     types = session.types()
-    assert "reset" not in types
-    assert session.state.recipe is recipe
-    assert session.state.phase == "done"
-    assert len(gemini.calls) == 1
-    assert gemini.calls[0]["system_prompt"] is PLANNING_PROMPT
+    assert "reset" in types
+    assert session.state.recipe is None
+    assert session.state.phase == "intake"
+    assert gemini.calls == []
+    assert pipeline._discovery.pending == "cravings"
     assert types[-1] == "turn_end"
 
 
@@ -1083,7 +1039,9 @@ async def test_navigation_readout_is_captioned():
     session.state.phase = "cooking"
     session.state.current_step_index = 0
 
-    await pipeline._respond("what's next", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="advance_step"))
+    assert session.state.current_step_index == 0
+    await pipeline.execute_action(ConversationAction(name="confirm"))
 
     captions = [
         event["text"] for event in session.events if event["type"] == "assistant_text"
@@ -1123,7 +1081,7 @@ async def test_cancel_farewell_is_captioned():
     session.state.phase = "cooking"
     session.state.current_step_index = 1
 
-    await pipeline._respond("stop cooking", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     assert "reset" in session.types()
     captions = [
@@ -1141,7 +1099,7 @@ async def test_plan_readback_is_captioned():
     session.state.recipe = recipe
     session.state.phase = "planning"
 
-    await pipeline._respond("let's cook", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="start_cooking"))
 
     captions = [
         event["text"] for event in session.events if event["type"] == "assistant_text"
@@ -1168,7 +1126,7 @@ async def test_streaming_reply_is_captioned_once_per_delta():
 
 
 def test_system_prompt_is_the_planner_companion():
-    assert "You are Planner" in SYSTEM_PROMPT
+    assert "You are Kef" in SYSTEM_PROMPT
     assert "warm cooking companion" in SYSTEM_PROMPT
     # The cooking-only guard and the disaster-first rule survive the rewrite.
     assert "Only help with cooking" in SYSTEM_PROMPT
@@ -1176,11 +1134,11 @@ def test_system_prompt_is_the_planner_companion():
 
 
 def test_prompts_guide_dish_suggestions():
-    """The companion/planning prompts carry the ~5-dish suggestion guidance."""
+    """Discovery ranks three dishes and respects the recorded constraints."""
     for prompt in (SYSTEM_PROMPT, PLANNING_PROMPT):
         lowered = prompt.lower()
-        assert "five" in lowered
-        assert "plan-it" in lowered
+        assert "three" in lowered
+        assert "restrictions" in lowered
     assert "what to cook" in PLANNING_PROMPT.lower()
 
 
@@ -1248,10 +1206,9 @@ async def test_pasted_recipe_then_revision_regenerates_from_parsed_title():
     pipeline._pending_dish = "chicken adobo"
 
     # Paste/dictate a recipe -> parsed, not generated.
-    await pipeline._respond(
+    await pipeline.execute_action(ConversationAction(name="parse_recipe", value=
         "Ingredients:\n1 kg beef\n2 cups tomato sauce\nBrown the beef and simmer.",
-        from_voice=False,
-    )
+    ))
     assert recipes.parse_calls and recipes.generate_calls == []
     assert session.state.recipe is parsed
     assert session.state.phase == "planning"
@@ -1298,7 +1255,7 @@ async def test_greeting_routes_to_planning_without_fabricated_dish_or_choice():
     await pipeline._respond("hello there", from_voice=False)
 
     types = session.types()
-    assert "choices" not in types
+    assert "choices" in types  # useful intake follow-ups without choosing a dish
     assert "plan" not in types
     assert "recipe" not in types
     assert session.state.recipe is None
@@ -1315,41 +1272,8 @@ async def test_greeting_routes_to_planning_without_fabricated_dish_or_choice():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "let's cook",
-        "lets cook",
-        "start",
-        "start cooking",
-        "cook it",
-        "let's start",
-        "go ahead",
-        "proceed",
-        "ready",
-        "go",
-    ],
-)
-def test_short_confirmations_are_recognized(text):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_start_confirmation(text) is True
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "what's next",
-        "can you add garlic?",
-        "let's change the servings",
-        "go back",
-        "is it ready to cook yet?",
-        "",
-        "this is a much longer sentence that clearly is not a start command",
-    ],
-)
-def test_questions_and_revisions_are_not_confirmations(text):
-    pipeline = _pipeline(_FakeSession(), gemini=_ScriptedGemini([]), recipes=_FakeRecipes(None))
-    assert pipeline._is_start_confirmation(text) is False
 
 
 # ---------------------------------------------------------------------------
@@ -1426,9 +1350,10 @@ async def test_repeat_begin_dish_with_a_known_dish_is_ignored():
     await pipeline._respond("let's plan it", from_voice=True)
 
     choices = [event for event in session.events if event["type"] == "choices"]
-    assert len(choices) == 1  # no repeat question
+    assert len(choices) == 2  # follow-up actions, without repeating the dish question
+    assert choices[-1]["options"][0]["label"] == "Cook it now"
     assert pipeline._pending_dish == "chicken adobo"
-    assert pipeline._awaiting_choice is False
+    assert pipeline._awaiting_choice is True
     assert session.state.recipe is None
     assert session.types()[-1] == "turn_end"
     assert len(gemini.calls) == 2
@@ -1445,7 +1370,7 @@ async def test_plan_it_answer_runs_the_interview_not_the_choice_again():
                     call_id="call_dish_plan",
                 )
             ],
-            [TextDelta("How many servings are you cooking for?")],
+            [FunctionCallEvent(name="conversation_action", arguments={"name": "plan_together"}, call_id="plan_together")],
         ]
     )
     recipes = _FakeRecipes(_plan_recipe())
@@ -1462,9 +1387,10 @@ async def test_plan_it_answer_runs_the_interview_not_the_choice_again():
     assert session.state.recipe is None
     assert pipeline._pending_dish == "chicken adobo"
     assert pipeline._awaiting_choice is False
-    # Only the original cook-now/plan-it choice was ever emitted.
+    # The servings question also receives useful follow-up options.
     choices = [event for event in session.events if event["type"] == "choices"]
-    assert len(choices) == 1
+    assert len(choices) == 2
+    assert choices[-1]["options"][0]["label"] == "2 servings"
     assert session.types()[-1] == "turn_end"
 
 
@@ -1485,7 +1411,7 @@ async def test_cook_it_now_answer_direct_cooks():
     pipeline = _pipeline(session, gemini=gemini, recipes=recipes)
 
     await pipeline._respond("chicken adobo", from_voice=False)
-    await pipeline._respond("cook it now", from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="cook_now"))
 
     assert recipes.generate_calls == [("chicken adobo", None, None)]
     assert session.state.recipe is recipe
@@ -1506,7 +1432,7 @@ async def test_cancel_during_plain_intake_resets_before_a_dish_is_known(text):
     assert session.state.recipe is None
     assert pipeline._pending_dish == ""
 
-    await pipeline._respond(text, from_voice=True)
+    await pipeline.execute_action(ConversationAction(name="reset"))
 
     assert "reset" in session.types()
     assert session.state.recipe is None
@@ -1517,21 +1443,15 @@ async def test_cancel_during_plain_intake_resets_before_a_dish_is_known(text):
     assert session.types()[-1] == "turn_end"
 
 
-async def test_cancel_timer_during_intake_does_not_reset():
-    """A timer utterance during intake falls through; it is never a cancel."""
-    gemini = _ScriptedGemini([TextDelta("Stopping the pasta timer.")])
-    recipes = _FakeRecipes(_plan_recipe())
+
+
+async def test_presented_plan_offers_contextual_cooking_choice_after_readback():
     session = _FakeSession()
-    pipeline = _pipeline(session, gemini=gemini, recipes=recipes)
-
-    # The bare "cancel" matches the cancel detector: the timer carve-out is
-    # load-bearing here.
-    assert pipeline._is_cancel("cancel the timer") is True
-
-    await pipeline._respond("cancel the timer", from_voice=True)
-
-    assert "reset" not in session.types()
-    assert session.state.phase == "intake"
-    # It fell through to the normal conversational/tool path.
-    assert len(gemini.calls) == 1
-    assert session.types()[-1] == "turn_end"
+    recipe = _plan_recipe()
+    pipeline = _pipeline(session, gemini=_ScriptedGemini([]), recipes=_FakeRecipes(recipe))
+    await pipeline._present_plan(recipe)
+    choices = [event for event in session.events if event["type"] == "choices"]
+    assert len(choices) == 1
+    assert [option["label"] for option in choices[0]["options"]] == ["Let's cook", "Adjust the plan"]
+    assert session.state.phase == "planning"
+    assert session.events.index(choices[0]) > next(i for i, event in enumerate(session.events) if event["type"] == "plan")

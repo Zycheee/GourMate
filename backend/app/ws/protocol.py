@@ -8,12 +8,14 @@ the wire contract centralized.
 from __future__ import annotations
 
 import base64
+import json
 from typing import Any
 
 from pydantic import BaseModel
 
 from ..errors import AppError, ErrorCode
 from ..schemas import (
+    ActivityEvent,
     AssistantAudioEvent,
     AssistantTextEvent,
     ChoiceOption,
@@ -36,7 +38,15 @@ from ..schemas import (
 
 
 def _dump(event: BaseModel) -> str:
-    return event.model_dump_json(exclude_none=False)
+    payload = event.model_dump(mode="json", exclude_none=False)
+    for key in ("turn_id", "utterance_id"):
+        if payload.get(key) is None:
+            payload.pop(key, None)
+    return json.dumps(payload)
+
+
+def activity(sleeping: bool, wake_listening: bool, muted: bool) -> str:
+    return _dump(ActivityEvent(sleeping=sleeping, wake_listening=wake_listening, muted=muted))
 
 
 def ready(session_id: str) -> str:
@@ -44,23 +54,29 @@ def ready(session_id: str) -> str:
     return _dump(ReadyEvent(session_id=session_id))
 
 
-def vad(state: str) -> str:
+def vad(state: str, utterance_id: str | None = None) -> str:
     """``{type:"vad", state}`` - speech_start / speech_end."""
-    return _dump(VadEvent(state=state))  # type: ignore[arg-type]
+    return _dump(VadEvent(state=state, utterance_id=utterance_id))  # type: ignore[arg-type]
 
 
-def transcript(text: str, final: bool) -> str:
+def transcript(text: str, final: bool, utterance_id: str | None = None) -> str:
     """``{type:"transcript", text, final}`` - partial/final user speech."""
-    return _dump(TranscriptEvent(text=text, final=final))
+    return _dump(TranscriptEvent(text=text, final=final, utterance_id=utterance_id))
 
 
-def choices(options: list["ChoiceOption | dict[str, str]"]) -> str:
+def choices(options: list["ChoiceOption | dict[str, Any]"]) -> str:
     """``{type:"choices", options:[{id,label}]}`` - tappable options.
 
     Accepts already-built :class:`~app.schemas.ChoiceOption` objects or plain
     ``{"id": ..., "label": ...}`` dicts; Pydantic coerces the latter.
     """
-    return _dump(ChoicesEvent(options=options))  # type: ignore[arg-type]
+    # Omit optional preview fields for backwards-compatible plain choices (§7).
+    event = ChoicesEvent(options=options)
+    payload = event.model_dump(exclude_none=True)
+    for option, serialized in zip(event.options, payload["options"]):
+        if option.food is not None:
+            serialized["food"]["estimated_total_minutes"] = option.food.estimated_total_minutes
+    return json.dumps(payload)
 
 
 def assistant_text(text: str) -> str:

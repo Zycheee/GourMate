@@ -14,11 +14,22 @@ import typesSource from "../types.ts?raw";
 // The golden manifest is imported raw so this test needs no filesystem APIs and
 // is bundled by Vite like any other module.
 const GOLDEN = JSON.parse(goldenRaw) as {
+  activity: { required: string[] };
+  action_names: string[];
+  conversation_action: { required: string[]; optional: string[] };
+  utterance_identity: { optional_field: string; events: string[] };
+  pending_audio_policies: string[];
+  control_optional: string[];
+  control_actions: string[];
+  reply_identity: { optional_field: string; events: string[] };
   client_to_server: string[];
   server_to_client: string[];
   tool_names: string[];
   error_codes: string[];
   voice_states: string[];
+  choice_option: { required: string[]; optional: string[] };
+  food_preview: { required: string[]; optional: string[]; difficulty: string[] };
+  food_image_lookup: { request_required: string[]; response_required: string[] };
 };
 
 const SOURCE = ts.createSourceFile(
@@ -97,6 +108,58 @@ function sorted(values: string[]): string[] {
 }
 
 describe("types.ts ↔ contracts/ws-events.json", () => {
+  it("activity, controls and optional reply identity match the manifest", () => {
+    const members = (alias: string) => unwrapUnion(findTypeAlias(alias).type).map(n => {
+      if (!ts.isTypeLiteralNode(n)) throw new Error("Expected event object");
+      return n.members.filter(ts.isPropertySignature);
+    });
+    const event = (alias: string, name: string) => members(alias).find(props => props.some(p => p.name.getText(SOURCE) === "type" && p.type && stringLiterals(p.type)[0] === name))!;
+    const activity = event("ServerMessage", "activity").filter(p => p.name.getText(SOURCE) !== "type");
+    expect(sorted(activity.map(p => p.name.getText(SOURCE)))).toEqual(sorted(GOLDEN.activity.required));
+    expect(activity.every(p => !p.questionToken)).toBe(true);
+    const controls = event("ClientMessage", "control");
+    expect(sorted(controls.filter(p => p.questionToken).map(p => p.name.getText(SOURCE)))).toEqual(sorted(GOLDEN.control_optional));
+    expect(sorted(stringLiterals(controls.find(p => p.name.getText(SOURCE) === "action")!.type!))).toEqual(sorted(GOLDEN.control_actions));
+    const mutePolicy = controls.find(p => p.name.getText(SOURCE) === "pending_audio")!;
+    expect(sorted(stringLiterals(mutePolicy.type!))).toEqual(sorted(GOLDEN.pending_audio_policies));
+    for (const name of GOLDEN.utterance_identity.events) {
+      expect(event("ServerMessage", name).find(p => p.name.getText(SOURCE) === GOLDEN.utterance_identity.optional_field)?.questionToken).toBeDefined();
+    }
+    for (const name of GOLDEN.reply_identity.events) {
+      expect(event("ServerMessage", name).find(p => p.name.getText(SOURCE) === GOLDEN.reply_identity.optional_field)?.questionToken).toBeDefined();
+    }
+  });
+  it("contextual actions match the manifest", () => {
+    expect(sorted(stringLiterals(findTypeAlias("ActionName").type))).toEqual(sorted(GOLDEN.action_names));
+    const node = findTypeAlias("ConversationAction").type;
+    if (!ts.isTypeLiteralNode(node)) throw new Error("Expected action object");
+    const properties = node.members.filter(ts.isPropertySignature);
+    expect(sorted(properties.filter(p => !p.questionToken).map(p => p.name.getText(SOURCE)))).toEqual(sorted(GOLDEN.conversation_action.required));
+    expect(sorted(properties.filter(p => p.questionToken).map(p => p.name.getText(SOURCE)))).toEqual(sorted(GOLDEN.conversation_action.optional));
+  });
+  it("photo lookup request and response match the REST manifest", () => {
+    for (const [name, fields] of [["FoodImageRequest", GOLDEN.food_image_lookup.request_required], ["FoodImageResponse", GOLDEN.food_image_lookup.response_required]] as const) {
+      const node = findTypeAlias(name).type;
+      if (!ts.isTypeLiteralNode(node)) throw new Error(`${name} must be an object type`);
+      const properties = node.members.filter(ts.isPropertySignature);
+      expect(sorted(properties.map(p => p.name.getText(SOURCE)))).toEqual(sorted(fields));
+      expect(properties.every(p => !p.questionToken)).toBe(true);
+    }
+  });
+  it("choice and food fields, optionality, and difficulty match the §7 manifest", () => {
+    for (const [name, shape] of [["ChoiceOption", GOLDEN.choice_option], ["FoodPreview", GOLDEN.food_preview]] as const) {
+      const node = findTypeAlias(name).type;
+      if (!ts.isTypeLiteralNode(node)) throw new Error(`${name} must be an object type`);
+      const properties = node.members.filter(ts.isPropertySignature);
+      expect(sorted(properties.filter(p => !p.questionToken).map(p => p.name.getText(SOURCE)))).toEqual(sorted(shape.required));
+      expect(sorted(properties.filter(p => p.questionToken).map(p => p.name.getText(SOURCE)))).toEqual(sorted(shape.optional));
+      if (name === "FoodPreview") {
+        const difficulty = properties.find(p => p.name.getText(SOURCE) === "difficulty");
+        expect(sorted(stringLiterals(difficulty!.type!))).toEqual(sorted(GOLDEN.food_preview.difficulty));
+      }
+    }
+  });
+
   it("ServerMessage types exactly match the §7 server→client list", () => {
     expect(sorted(discriminatorValues("ServerMessage"))).toEqual(
       sorted(GOLDEN.server_to_client)

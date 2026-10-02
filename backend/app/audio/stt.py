@@ -139,6 +139,13 @@ class WhisperSTT:
         return self._hotwords
 
     async def transcribe(self, pcm_int16: bytes) -> str:
+        return await self._transcribe(pcm_int16, wake_only=False)
+
+    async def transcribe_wake(self, pcm_int16: bytes) -> str:
+        """Use the same model with a short wake vocabulary, without an LLM (§4)."""
+        return await self._transcribe(pcm_int16, wake_only=True)
+
+    async def _transcribe(self, pcm_int16: bytes, *, wake_only: bool) -> str:
         """Transcribe 16 kHz mono Int16 PCM into plain text.
 
         Returns an empty string when no speech is recognized. Raises
@@ -154,9 +161,9 @@ class WhisperSTT:
             )
 
         audio = np.frombuffer(pcm_int16, dtype=np.int16).astype(np.float32) / 32768.0
-        return await asyncio.to_thread(self._transcribe_sync, model, audio)
+        return await asyncio.to_thread(self._transcribe_sync, model, audio, wake_only=wake_only)
 
-    def _transcribe_sync(self, model: Any, audio: np.ndarray) -> str:
+    def _transcribe_sync(self, model: Any, audio: np.ndarray, *, wake_only: bool = False) -> str:
         # Anti-hallucination: only forward the long culinary ``initial_prompt``
         # when the clip is long enough to justify it. A long prompt on a short
         # or quiet clip is a known faster-whisper hallucination trigger, so it is
@@ -166,6 +173,11 @@ class WhisperSTT:
             if (self._initial_prompt and len(audio) / 16000 >= 1.0)
             else None
         )
+        hotwords = self._hotwords
+        if wake_only:
+            hotwords = "Kef, Keef, Hey Kef, Hey Keef, Hello Kef, Okay Kef, OK Keef"
+            if len(audio) / 16000 >= 1.0 and self._hotwords:
+                hotwords += ", " + self._hotwords
         segments, _info = model.transcribe(
             audio,
             language="en",
@@ -179,7 +191,7 @@ class WhisperSTT:
             no_speech_threshold=0.6,
             compression_ratio_threshold=2.4,
             log_prob_threshold=-1.0,
-            hotwords=self._hotwords,
+            hotwords=hotwords,
             initial_prompt=initial_prompt,
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()

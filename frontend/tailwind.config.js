@@ -5,6 +5,38 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Direct brand palette tokens
+        paper: "#F5EEDB",
+        white: "#FFFFFF",
+        "sea-salt": "#F9F7F7",
+        saffron: {
+          DEFAULT: "#FFB347",
+          soft: "#FFCA7A",
+          strong: "#E09228"
+        },
+        "castleton-green": {
+          DEFAULT: "#046241",
+          light: "#088558",
+          dark: "#034830"
+        },
+        "dark-serpent": {
+          DEFAULT: "#133020",
+          light: "#1C4730",
+          dark: "#0D2116"
+        },
+        "earth-yellow": {
+          DEFAULT: "#FFC370",
+          light: "#FFD49A",
+          dark: "#E5A653"
+        },
+        "jet-black": "#0A0A0A",
+        charcoal: "#1F1F1F",
+        slate: {
+          muted: "#64748B",
+          dark: "#334155",
+          light: "#94A3B8"
+        },
+
         // `<alpha-value>` format so `bg-bg/70` style modifiers work with CSS vars.
         bg: "rgb(var(--bg-rgb) / <alpha-value>)",
         surface: "rgb(var(--surface-rgb) / <alpha-value>)",
@@ -30,13 +62,17 @@ export default {
         mono: ['"Geist Mono"', "ui-monospace", "monospace"]
       },
       fontSize: {
-        "12": ["12px", { lineHeight: "16px" }],
-        "14": ["14px", { lineHeight: "20px" }],
-        "16": ["16px", { lineHeight: "24px" }],
-        "20": ["20px", { lineHeight: "28px" }],
-        "28": ["28px", { lineHeight: "34px" }],
-        "40": ["40px", { lineHeight: "44px" }],
-        "56": ["56px", { lineHeight: "60px" }]
+        "10": ["0.625rem", { lineHeight: "1.3", letterSpacing: "0.06em" }],
+        "11": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.06em" }],
+        "12": ["0.75rem", { lineHeight: "1.35" }],
+        "13": ["0.8125rem", { lineHeight: "1.5" }],
+        "14": ["0.875rem", { lineHeight: "1.5" }],
+        "16": ["1rem", { lineHeight: "1.5" }],
+        "18": ["1.125rem", { lineHeight: "1.5" }],
+        "20": ["1.25rem", { lineHeight: "1.3", letterSpacing: "-0.015em" }],
+        "28": ["clamp(1.375rem, 1.1rem + 1vw, 1.75rem)", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
+        "40": ["clamp(1.45rem, 1.25rem + 1vw, 2rem)", { lineHeight: "1.15", letterSpacing: "-0.025em" }],
+        "56": ["clamp(1.75rem, 1.45rem + 1.5vw, 2.5rem)", { lineHeight: "1.1", letterSpacing: "-0.03em" }]
       },
       borderRadius: {
         sm: "8px",
