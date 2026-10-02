@@ -5,7 +5,7 @@ import { useSession } from "../store/session";
 import { makeRecipe } from "../test/fixtures";
 import { UI } from "../lib/copy";
 
-const voice = vi.hoisted(() => ({ start: vi.fn(), sendText: vi.fn(), toggleMute: vi.fn(), setVoice: vi.fn(), restartMic: vi.fn(), disconnect: vi.fn(), interrupt: vi.fn() }));
+const voice = vi.hoisted(() => ({ start: vi.fn(), sendText: vi.fn(), sendAction: vi.fn(), toggleMute: vi.fn(), setVoice: vi.fn(), restartMic: vi.fn(), disconnect: vi.fn(), interrupt: vi.fn() }));
 vi.mock("../hooks/useVoiceSession", () => ({ useVoiceSession: () => voice }));
 vi.mock("../components/Avatar3D", () => ({ default: () => <div data-testid="chef" /> }));
 vi.mock("../lib/audio", () => ({ getMicLevel: () => 0, isAudioUnlocked: () => true, resumeAudioContext: async () => true }));
@@ -18,6 +18,34 @@ beforeEach(() => {
 });
 
 describe("mobile cooking workspace", () => {
+  it("reveals the conversation and its inline confirmation from the cooking tab", async () => {
+    useSession.getState().setRecipe(makeRecipe());
+    render(<App />);
+    fireEvent.click(screen.getByRole("tab", { name: "Cooking" }));
+    act(() => {
+      useSession.getState().setLiveCaption("Leave step 1 and go to step 2?");
+      useSession.getState().setChoices([{ id: "continue", label: "Continue" }, { id: "stay", label: "Stay here" }]);
+    });
+    expect(screen.getByRole("tab", { name: "Conversation" })).toHaveAttribute("aria-selected", "true");
+    const options = screen.getByRole("group", { name: "Reply options" });
+    expect(screen.getByRole("log")).toContainElement(options);
+    expect(options.closest("li")).toHaveTextContent("Leave step 1 and go to step 2?");
+    expect(screen.queryByText("Your options")).not.toBeInTheDocument();
+    await screen.findByTestId("chef");
+  });
+  it("lets a new user continue with text without requesting microphone access", async () => {
+    useSession.getState().setOnboarded(false);
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
+    render(<App />);
+    await screen.findByTestId("chef");
+    fireEvent.click(screen.getByRole("button", { name: "Use text instead" }));
+    expect(useSession.getState().onboarded).toBe(true);
+    expect(useSession.getState().muted).toBe(true);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Allow microphone" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toBeVisible();
+  });
   it("keeps the workspace, chef and draft intact when a microphone notice appears and is dismissed", async () => {
     render(<App />);
     const chef = await screen.findByTestId("chef");
@@ -56,11 +84,10 @@ describe("mobile cooking workspace", () => {
     await waitFor(() => expect(screen.getByRole("tab", { name: "Recipe" })).toHaveAttribute("aria-selected", "true"));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Chicken Adobo" })).toBeVisible());
     expect(voice.sendText).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: UI.plan.letsCook })).not.toBeInTheDocument();
-    act(() => useSession.getState().setChoices([{ id: "start_cooking", label: "Let's cook" }]));
-    fireEvent.click(screen.getByRole("button", { name: "Let's cook" }));
-    expect(voice.sendText).toHaveBeenCalledWith("Let's cook");
-    expect(useSession.getState().choices).toBeNull();
+    const steps = screen.getByText("Steps").closest("details");
+    expect(steps).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
+    expect(voice.sendAction).toHaveBeenCalledWith({ name: "start_cooking" }, "Start cooking");
   });
 
   it("restores cooking content with microphone access and exits focus when opening chat", async () => {
@@ -68,7 +95,7 @@ describe("mobile cooking workspace", () => {
     render(<App />);
     expect(screen.getByRole("tab", { name: "Conversation" })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("tab", { name: "Cooking" }));
-    fireEvent.click(screen.getByRole("button", { name: UI.mute }));
+    fireEvent.click(screen.getByRole("button", { name: UI.unmute }));
     expect(voice.toggleMute).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: UI.focusMode }));
     expect(useSession.getState().focusMode).toBe(true);
@@ -78,14 +105,16 @@ describe("mobile cooking workspace", () => {
     await screen.findByTestId("chef");
   });
 
-  it("shows no generic intake actions and keeps offered choices available when collapsed", async () => {
-    useSession.getState().addChat({ role: "user", text: "Hello" });
+  it("shows options only in the conversation and preserves them while collapsed", async () => {
+    useSession.getState().addChat({ role: "assistant", text: "What would you like to do?" });
     render(<App />);
     expect(screen.queryByRole("button", { name: UI.plan.cookNow })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: UI.plan.planIt })).not.toBeInTheDocument();
     act(() => useSession.getState().setChoices([{ id: "cook", label: "Cook it now" }, { id: "plan", label: "Let's plan it" }]));
     fireEvent.click(screen.getByRole("button", { name: "Collapse panel" }));
-    expect(screen.getAllByRole("button", { name: "Cook it now" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Cook it now" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand panel" }));
+    expect(screen.getByRole("log")).toContainElement(screen.getByRole("button", { name: "Cook it now" }));
     fireEvent.click(screen.getByRole("button", { name: "Cook it now" }));
     expect(useSession.getState().choices).toBeNull();
     expect(await screen.findByTestId("chef")).toBeVisible();
@@ -122,7 +151,7 @@ describe("mobile cooking workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Minimize Conversation" }));
     expect(screen.getByRole("main")).toHaveAttribute("data-expanded", "true");
     expect(screen.getByTestId("chef")).toBe(chef);
-    expect(screen.getAllByRole("button", { name: "Let's cook" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Let's cook" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Chicken Adobo" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Recipe" })).not.toBeInTheDocument();

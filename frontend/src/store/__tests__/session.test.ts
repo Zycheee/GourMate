@@ -224,3 +224,15 @@ describe("persistence (localStorage)", () => {
     expect(raw.state.settings.theme).toBe("light");
   });
 });
+
+
+it("reload sleeps and mutes while preserving the recipe and timers", async () => {
+  const s = useSession.getState();
+  s.setRecipe(makeRecipe()); s.setTimers([makeTimer()]); s.setActivity(false, true, false);
+  await persistApi.rehydrate();
+  expect(useSession.getState().sleeping).toBe(true);
+  expect(useSession.getState().muted).toBe(true);
+  expect(useSession.getState().wakeListening).toBe(false);
+  expect(useSession.getState().recipe).not.toBeNull();
+  expect(useSession.getState().timers).toHaveLength(1);
+});

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     whisper_compute_type: str = "int8_float32"
     # Comma-separated hotwords bias the decoder toward domain/cuisine terms
     # without the hallucination risk of a long `initial_prompt`.
-    whisper_hotwords: str = "adobo, sinigang, pancit, lechon, tinola, kaldereta, Filipino, tablespoon, teaspoon, simmer, saute, garlic, butter, olive oil, chicken, salmon, pasta, rice"
+    whisper_hotwords: str = "Kef, Keef, adobo, sinigang, pancit, lechon, tinola, kaldereta, Filipino, tablespoon, teaspoon, simmer, saute, garlic, butter, olive oil, chicken, salmon, pasta, rice"
     # Culinary vocabulary/units/numbers bias passed to faster-whisper as
     # ``initial_prompt``. Keep it a short comma list (well under the 224-token
     # prompt window); no markdown.
@@ -211,6 +211,10 @@ ALLOWED_TTS_VOICES: tuple[str, ...] = (
     "en-GB-SoniaNeural",
     "en-GB-RyanNeural",
     "en-AU-NatashaNeural",
+    "en-US-AvaNeural",
+    "en-US-AndrewNeural",
+    "en-US-EmmaNeural",
+    "en-US-BrianNeural",
 )
 
 _ALLOWED_TTS_VOICE_SET = frozenset(ALLOWED_TTS_VOICES)

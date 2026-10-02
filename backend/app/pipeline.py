@@ -41,12 +41,12 @@ from .llm.tools import (
     _duration_minutes,
     _format_step,
     is_server_tool,
-    resolve_navigation,
     validate_tool_call,
 )
 from .ratelimit import RateLimiters
-from .recipe.service import RecipeService, classify_intake
-from .schemas import ChatTurn, Recipe, ToolCall
+from .recipe.service import RecipeService
+from .recipe.discovery import Discovery, gallery_food
+from .schemas import ChatTurn, ConversationAction, Recipe, ToolCall
 from .tts.edge import EdgeTTS, SentenceChunker
 from .ws import protocol
 
@@ -113,6 +113,8 @@ class VoicePipeline:
         self._tts_down = False
         self._noise_floor_dbfs = -60.0
         self._pending_pcm: bytearray = bytearray()
+        self._pending_utterance_id: str | None = None
+        self._pending_wake_only = False
         self._turn_stage: str = "idle"
         self._turn_pcm: bytes = b""
         self._partial_task: asyncio.Task[None] | None = None
@@ -141,10 +143,27 @@ class VoicePipeline:
         #: True while a "ready to finish?" confirmation is awaiting an answer
         #: after a done cue at/after the final step (architecture §4 completion).
         self._awaiting_done_confirm = False
+        self._pending_navigation: tuple[NavigationResult, str, int] | None = None
+        self._discovery = Discovery()
+        self._choices_offered = False
+        self._reply_id: str | None = None
+        self._utterance_id: str | None = None
+        self._turn_utterance_id: str | None = None
+        self._turn_wake_only = False
+        self._wake_utterances: set[str] = set()
+        self._submitted_utterances: set[str] = set()
+        self._utterance_aliases: dict[str, str] = {}
+        self._current_request = ""
+        self._input_epoch = 0
+        self._turn_source = "audio"
 
     # -- helpers -----------------------------------------------------------
     def _add_turn(self, role: str, text: str, tool_call: ToolCall | None = None) -> None:
         state = self._session.state
+        if not text.strip() and tool_call is None:
+            return
+        if state.turns and state.turns[-1].role == role and state.turns[-1].text == text:
+            return
         state.turns.append(
             ChatTurn(
                 id=str(uuid.uuid4()),
@@ -159,6 +178,25 @@ class VoicePipeline:
             del state.turns[: len(state.turns) - window]
 
     async def _send(self, payload: str) -> None:
+        event = json.loads(payload)
+        kind = event.get("type")
+        if getattr(self._session.state, "sleeping", False) and kind in {"vad", "transcript", "state", "error", "rate_limited"}:
+            return
+        if kind in {"assistant_text", "assistant_audio", "choices"} and self._reply_id is None:
+            self._reply_id = str(uuid.uuid4())
+        if kind in {"assistant_text", "assistant_audio", "choices", "state"} and self._reply_id:
+            event["turn_id"] = self._reply_id
+            payload = json.dumps(event)
+        if kind == "choices":
+            known = {"Cook it now": "cook_now", "Let's plan it": "plan_together", "Start cooking": "start_cooking", "Let's cook": "start_cooking", "Cancel plan": "reset", "Continue": "confirm", "Stay here": "decline", "Finish anyway": "confirm", "Yes, I'm done": "confirm", "Keep cooking": "decline", "Next step": "advance_step", "Repeat this step": "repeat_step", "Help with this step": "ask_help", "Help me choose a dish": "discover", "Show other dishes": "suggest_now", "Change my preferences": "change_preferences", "Suggest now": "suggest_now"}
+            for option in event.get("options", []):
+                if not option.get("action"):
+                    if option.get("food"):
+                        option["action"] = {"name": "select_dish", "value": option["food"]["name"]}
+                    elif option.get("label") in known:
+                        option["action"] = {"name": known[option["label"]]}
+            payload = json.dumps(event)
+            self._choices_offered = True
         await self._session.send_event(payload)
 
     async def _say(self, text: str) -> None:
@@ -210,9 +248,22 @@ class VoicePipeline:
         await self._set_state("idle")
 
     def _recipe_context(self) -> str:
+        state = self._session.state
+        return (f"Session phase: {state.phase}. Client owns Recipe and current step. "
+                f"Pending dish: {self._pending_dish or 'none'}. Awaiting cook-now/plan choice: {self._awaiting_choice}. "
+                f"Pending navigation confirmation: {self._pending_navigation!r}. Pending finish confirmation: {self._awaiting_done_confirm}. "
+                f"Discovery active: {self._discovery.active}; ready for suggestions: {self._discovery.ready}; "
+                f"current interview question: {self._discovery.pending}; answers: {self._discovery.constraints()}; "
+                f"servings: {self._discovery.servings or 'unknown'}. " + self._recipe_details())
+
+    def _recipe_details(self) -> str:
         recipe = self._session.state.recipe
         if recipe is None:
-            return ""
+            if self._pending_dish:
+                return (f"Selected dish: {self._pending_dish}. Plan this dish; do not suggest new dishes. "
+                        f"Known preferences: {self._discovery.constraints()}. "
+                        f"Servings: {self._discovery.servings or 'unknown'}.")
+            return self._discovery.context() if self._discovery.active else ""
         index = self._session.state.current_step_index
         lines = [
             f"Title: {recipe.title}",
@@ -222,6 +273,9 @@ class VoicePipeline:
             lines.append("Ingredients: " + ", ".join(i.display for i in recipe.ingredients))
         if 0 <= index < len(recipe.steps):
             lines.append("Current instruction: " + recipe.steps[index].instruction)
+        if self._discovery.answers:
+            lines.append("Preferences: " + self._discovery.constraints())
+        lines.append("Client Recipe snapshot: " + recipe.model_dump_json())
         return "\n".join(lines)
 
     def _update_noise_floor(self, pcm: bytes) -> None:
@@ -243,11 +297,10 @@ class VoicePipeline:
     # -- audio ingress -----------------------------------------------------
     async def handle_audio(self, pcm: bytes) -> None:
         """Buffer a PCM frame, run VAD and react to transitions."""
-        if self._session.muted:
+        if self._session.muted and not getattr(self._session.state, "wake_listening", False):
             return
-        if self._session.assistant_speaking:
-            # Echo gate: never feed our own TTS (speakers) back in.
-            return
+        # Browser capture uses acoustic echo cancellation. Continue feeding VAD
+        # during playback so real near-end speech can interrupt the assistant.
         if not self._services.readiness.ready:
             await self._notify_loading()
             return
@@ -295,8 +348,10 @@ class VoicePipeline:
 
     async def _on_speech_start(self, event: VADEvent) -> None:
         buffer = self._session.audio
-        if event.barge_in or self._session.assistant_speaking:
+        if event.barge_in or self._session.assistant_speaking or ((self._turn_source == "text" or self._turn_stage == "reply") and self._turn_task is not None and not self._turn_task.done()):
             await self._barge_in()
+        if not self._continuation_pcm:
+            self._utterance_id = str(uuid.uuid4())
         # A new segment: cancel any pending continuation finalize and keep
         # accumulating into the same utterance if one is already in progress.
         self._cancel_continuation()
@@ -308,7 +363,7 @@ class VoicePipeline:
         self._begin_streaming_caption()
         buffer.begin_utterance()
         buffer.extend_utterance(buffer.snapshot(_PRE_ROLL_S))
-        await self._send(protocol.vad("speech_start"))
+        await self._send(protocol.vad("speech_start", self._utterance_id))
         await self._set_state("listening")
 
     async def _on_speech_end(self, *, forced: bool = False) -> None:
@@ -357,13 +412,14 @@ class VoicePipeline:
     async def _finalize_utterance(self, *, forced: bool = False) -> None:
         pcm = bytes(self._continuation_pcm)
         self._continuation_pcm.clear()
+        self._session.audio.clear()
         wall = (
             time.monotonic() - self._utterance_wall_start
             if self._utterance_wall_start
             else 0.0
         )
         self._utterance_wall_start = 0.0
-        await self._send(protocol.vad("speech_end"))
+        await self._send(protocol.vad("speech_end", self._utterance_id))
         await self._set_state("submitting")
         if not pcm:
             await self._send(
@@ -529,6 +585,9 @@ class VoicePipeline:
         self._cancel_continuation()
         self._continuation_pcm.clear()
         self._cancel.set()
+        self._input_epoch += 1
+        self._reply_id = None
+        self._pending_calls.clear()
         self._session.assistant_speaking = False
         self._services.vad.mark_assistant_speaking(False)
         task = self._turn_task
@@ -545,13 +604,19 @@ class VoicePipeline:
             # the continuation; it runs as the next turn when this one finishes.
             logger.info("turn in flight; queueing continuation (%d bytes)", len(pcm))
             self._pending_pcm.extend(pcm)
+            self._pending_utterance_id = self._utterance_id
+            self._pending_wake_only = self._utterance_id in self._wake_utterances or bool(getattr(self._session.state, "sleeping", False) and getattr(self._session.state, "wake_listening", False))
             return
         self._start_turn(pcm)
 
     def _start_turn(self, pcm: bytes) -> None:
         self._cancel.clear()
+        self._turn_source = "audio"
         self._tts_down = False
         self._turn_pcm = pcm
+        self._turn_utterance_id = self._utterance_id or str(uuid.uuid4())
+        self._utterance_id = None
+        self._turn_wake_only = self._turn_utterance_id in self._wake_utterances or bool(getattr(self._session.state, "sleeping", False) and getattr(self._session.state, "wake_listening", False))
         self._turn_stage = "stt"
         self._turn_task = asyncio.create_task(self._run_audio_turn(pcm))
         self._turn_task.add_done_callback(self._on_turn_done)
@@ -568,10 +633,18 @@ class VoicePipeline:
             return
         pcm = bytes(self._pending_pcm)
         self._pending_pcm.clear()
+        self._utterance_id = self._pending_utterance_id
+        if self._pending_wake_only and self._utterance_id:
+            self._wake_utterances.add(self._utterance_id)
+        self._pending_utterance_id = None
+        self._pending_wake_only = False
         self._start_turn(pcm)
     # -- turn execution ----------------------------------------------------
     async def _run_audio_turn(self, pcm: bytes) -> None:
         state = self._session.state
+        epoch = self._input_epoch
+        utterance_id = self._turn_utterance_id or self._utterance_id or str(uuid.uuid4())
+        wake_only = self._turn_wake_only or bool(getattr(state, "sleeping", False) and getattr(state, "wake_listening", False))
         try:
             t0 = time.perf_counter()
             # --- audio-level diagnostic + silence gate (anti-hallucination) ---
@@ -618,15 +691,15 @@ class VoicePipeline:
                     rms_dbfs,
                     peak,
                 )
-                await self._send(
-                    protocol.error(ErrorCode.NO_SPEECH, "I didn't catch that.", True)
-                )
+                if utterance_id not in self._submitted_utterances:
+                    await self._send(protocol.error(ErrorCode.NO_SPEECH, "I didn't catch that.", True))
                 await self._set_state("idle")
                 return
 
             try:
+                transcribe = getattr(self._services.stt, "transcribe_wake", self._services.stt.transcribe) if wake_only else self._services.stt.transcribe
                 text = await asyncio.wait_for(
-                    self._services.stt.transcribe(voiced),
+                    transcribe(voiced),
                     timeout=self._settings.stt_timeout_s,
                 )
             except asyncio.TimeoutError:
@@ -649,12 +722,28 @@ class VoicePipeline:
                 return
 
             logger.info("turn timing: stt=%.0fms", (time.perf_counter() - t0) * 1000.0)
+            if epoch != self._input_epoch or self._cancel.is_set():
+                return
             self._turn_stage = "reply"
             text = text.strip()
+            if wake_only:
+                match = re.match(r"^(?:(?:hey|hello|okay|ok)[\s,.!?:;—-]+)?(?:kef|keef)\b(?!['’]\w)[\s,.!?:;—-]*(.*)$", text, re.I)
+                if not match:
+                    return
+                mic_on = getattr(state, "wake_listening", False) or not getattr(state, "muted", False)
+                state.sleeping = False
+                state.wake_listening = False
+                state.muted = not mic_on
+                await self._send(protocol.activity(False, False, state.muted))
+                text = match.group(1).strip()
+                if not text:
+                    self._reply_id = str(uuid.uuid4())
+                    await self._say("I'm here. What would you like to cook?")
+                    await self._finish_turn()
+                    return
             if not text:
-                await self._send(
-                    protocol.error(ErrorCode.NO_SPEECH, "I didn't catch that.", True)
-                )
+                if utterance_id not in self._submitted_utterances:
+                    await self._send(protocol.error(ErrorCode.NO_SPEECH, "I didn't catch that.", True))
                 await self._set_state("idle")
                 return
 
@@ -666,8 +755,9 @@ class VoicePipeline:
                 await self._set_state("idle")
                 return
 
+            self._reply_id = str(uuid.uuid4())
             await self._set_state("processing")
-            await self._send(protocol.transcript(text, True))
+            await self._send(protocol.transcript(text, True, self._utterance_aliases.get(utterance_id, utterance_id)))
             if self._settings.transcription_only:
                 logger.info("transcription-only: reply suppressed")
                 await self._finish_turn()
@@ -685,6 +775,90 @@ class VoicePipeline:
             # Always release the echo gate, even on failure, or the server
             # would drop all further mic audio and appear "stuck".
             self._release_echo_gate()
+
+    async def submit_input(self, requested_id: str | None, *, wake_only: bool = False) -> None:
+        """Finish pre-mute speech exactly once without accepting new capture (§7)."""
+        self._cancel_continuation()
+        await self._stop_partial()
+        self._end_streaming_caption()
+        audio = self._session.audio
+        was_capturing = audio.capturing
+        pcm = bytes(self._continuation_pcm)
+        self._continuation_pcm.clear()
+        if was_capturing:
+            pcm += audio.finish_utterance()
+        task_active = self._turn_task is not None and not self._turn_task.done()
+        in_flight = task_active and self._turn_source == "audio"
+        if not pcm:
+            tail = audio.snapshot()
+            # A prior utterance was removed from the ring at finalization. A
+            # voiced tail here therefore belongs to fresh, pre-VAD capture.
+            start, end = trim_silence_bounds(tail, sample_rate=self._settings.audio_sample_rate)
+            if not in_flight or (end - start) / (self._settings.audio_sample_rate * 2) >= self._settings.stt_min_utterance_s:
+                pcm = tail
+        source_id = (self._pending_utterance_id or self._turn_utterance_id) if in_flight and not pcm else self._utterance_id
+        identity = requested_id or source_id or str(uuid.uuid4())
+        if identity in self._submitted_utterances:
+            return
+        if source_id:
+            self._utterance_aliases[source_id] = identity
+            self._submitted_utterances.add(source_id)
+        self._submitted_utterances.add(identity)
+        if wake_only:
+            self._wake_utterances.add(identity)
+            if source_id:
+                self._wake_utterances.add(source_id)
+        if len(self._submitted_utterances) > 64:
+            self._submitted_utterances = {identity, source_id} - {None}
+            self._utterance_aliases = {source_id: identity} if source_id else {}
+            self._wake_utterances.intersection_update({identity, source_id})
+        audio.reset_utterance()
+        audio.clear()
+        self._services.vad.reset()
+        if in_flight and not pcm:
+            return
+        if pcm:
+            if task_active and self._turn_source == "text":
+                await self._barge_in()
+            self._utterance_id = identity
+            self._schedule_turn(pcm)
+
+    async def discard_input(self, *, cancel_reply: bool = False) -> None:
+        """Cancellation discards capture and invalidates even a delayed STT result (§7)."""
+        self._input_epoch += 1
+        self._submitted_utterances.clear()
+        self._utterance_aliases.clear()
+        self._wake_utterances.clear()
+        self._utterance_id = None
+        self._turn_utterance_id = None
+        self._cancel_continuation()
+        self._continuation_pcm.clear()
+        self._pending_pcm.clear()
+        self._turn_pcm = b""
+        audio = getattr(self._session, "audio", None)
+        if audio is not None:
+            audio.reset_utterance()
+            audio.clear()
+        await self._stop_partial()
+        self._end_streaming_caption()
+        self._services.vad.reset()
+        if cancel_reply or self._turn_source == "audio":
+            await self._barge_in()
+            await self._set_state("idle")
+
+    async def start_text_input(self, text: str) -> None:
+        """Keep the receive loop free to handle mute and superseding input."""
+        await self.discard_input(cancel_reply=True)
+        state = self._session.state
+        if getattr(state, "sleeping", False):
+            state.sleeping = False
+            state.wake_listening = False
+            await self._send(protocol.activity(False, False, state.muted))
+        self._turn_source = "text"
+        self._reply_id = str(uuid.uuid4())
+        self._cancel.clear()
+        self._turn_task = asyncio.create_task(self.handle_text_input(text))
+        self._turn_task.add_done_callback(self._on_turn_done)
 
     async def handle_text_input(self, text: str) -> None:
         """Equal-weight text intake path (FR-1.3)."""
@@ -719,122 +893,209 @@ class VoicePipeline:
             self._release_echo_gate()
 
     async def _respond(self, text: str, *, from_voice: bool) -> None:
+        """All free-form intent is interpreted in the existing Gemini turn (§9)."""
+        if self._reply_id is None:
+            self._reply_id = str(uuid.uuid4())
+        self._choices_offered = False
+        self._current_request = text
+        await self._run_conversation(text, system_prompt=PLANNING_PROMPT if self._session.state.phase != "cooking" else None)
+
+    async def start_action(self, action: ConversationAction) -> None:
+        await self.discard_input(cancel_reply=True)
         state = self._session.state
-        logger.debug("responding to %s input", "voice" if from_voice else "text")
+        state.sleeping = False
+        state.wake_listening = False
+        await self._send(protocol.activity(False, False, getattr(state, "muted", self._session.muted)))
+        self._turn_source = "text"
+        self._cancel.clear()
+        self._reply_id = str(uuid.uuid4())
+        self._choices_offered = False
+        await self._set_state("processing")
+        self._turn_task = asyncio.create_task(self.execute_action(action))
+        self._turn_task.add_done_callback(self._on_turn_done)
 
-        # Cancel / discontinue are deterministic and never reach Gemini. Cancel
-        # covers the whole planning flow (the interview, before a Recipe exists,
-        # as well as a presented plan); discontinue covers cooking. Any intake or
-        # planning turn is "in planning" even before a dish has been recorded, so
-        # "cancel"/"start over"/"forget it"/"never mind" always reset instead of
-        # falling through to the model. "cancel the timer"/"stop the timer" must
-        # still fall through to the timer tool path, so a timer utterance is
-        # carved out here exactly as ``_is_discontinue`` carves it out.
-        in_planning = state.recipe is None or state.phase == "planning"
-        if in_planning and "timer" not in text.lower() and self._is_cancel(text):
-            await self._reset_session(text)
-            return
+    def _record_preferences(self, action: ConversationAction) -> None:
+        if action.servings is not None:
+            self._discovery.servings = action.servings
+        for key, value in (action.answers or {}).items():
+            value = value.strip()[:1000]
+            if value:
+                previous = self._discovery.answers.get(key, "")
+                if key == "dietary" and previous:
+                    value = previous if value in previous else previous + "; " + value
+                self._discovery.answers[key] = value
+                if self._discovery.pending == key:
+                    self._discovery.pending = None
 
-        # Completion confirmation: the previous turn was a done cue, so this turn
-        # either confirms the finish, defers it, or falls through. A done cue
-        # takes precedence over discontinue so "done cooking" finishes while
-        # "stop cooking" still resets; both ignore timer utterances.
-        if state.phase == "cooking" and self._awaiting_done_confirm:
-            self._awaiting_done_confirm = False
-            if self._is_affirmative(text):
-                await self._complete_recipe(text)
-                return
-            if self._is_negative(text):
-                await self._decline_done(text)
-                return
-            # Anything else falls through to the normal cooking handling.
-        if state.phase == "cooking" and self._is_done_cue(text):
-            await self._confirm_done(text)
-            return
-        if state.phase == "cooking" and self._is_discontinue(text):
-            await self._reset_session(text)
-            return
-
-        # Recipe complete: never replay the final step. A follow-up ("what's
-        # next" / "what should I cook") runs the companion prompt, which offers
-        # a fresh dish via suggestions (architecture §4 [14], §9.1). A cancel
-        # ("start over") or discontinue ("stop cooking", or the completion
-        # card's "Cook something else" line) still resets to intake. The timer
-        # carve-out is applied to both detectors so "stop the timer"/
-        # "cancel the timer" falls through to the timer tool path, never a
-        # reset.
-        if state.phase == "done":
-            if "timer" not in text.lower() and (
-                self._is_cancel(text) or self._is_discontinue(text)
-            ):
-                await self._reset_session(text)
-                return
-            await self._run_planning(text)
-            return
-
-        # Intake / planning: no recipe yet.
-        if state.recipe is None:
-            if self._pending_dish:
-                # A dish has already been named via ``begin_dish``. The first
-                # follow-up answers the direct-cook vs plan-together choice;
-                # later turns are interview answers handled by the planning
-                # conversation.
-                if self._awaiting_choice:
-                    self._awaiting_choice = False
-                    if self._is_direct_cook(text):
-                        await self._direct_cook(text)
-                        return
-                    # "Plan it" and a plain interview answer both run the
-                    # planning conversation; the branch is explicit for clarity.
-                    if self._is_plan_first(text):
-                        await self._run_planning(text)
-                        return
-                    await self._run_planning(text)
-                    return
-                if classify_intake(text) == "user_text":
-                    await self._handle_user_recipe(text)
-                else:
-                    await self._run_planning(text)
-                return
-            if classify_intake(text) == "user_text":
-                # A dictated/pasted recipe skips the interview and is presented
-                # as a plan (still awaiting explicit confirmation).
-                await self._handle_user_recipe(text)
-                return
-            # A dish name, a greeting, an unclear input and a "what should I
-            # cook?" ask all run the planning conversation. The model decides
-            # whether to call ``begin_dish`` (a clear dish), ``offer_choices``
-            # (a suggestion ask), or ask a clarifying question; it must never
-            # echo the user's raw words back.
-            await self._run_planning(text)
-            return
-
-        # Pre-cook planning: confirmation starts cooking; anything else is a
-        # revision handled by the planning conversation (create_plan).
-        if state.phase == "planning":
-            if self._is_start_confirmation(text):
-                self._add_turn("user", text)
+    async def execute_action(self, action: ConversationAction, *, from_model: bool = False) -> bool:
+        """Shared validated executor; the model never owns Recipe state (§7, §9)."""
+        state = self._session.state
+        name = action.name
+        if not from_model:
+            self._add_turn("user", action.value or name.replace("_", " "))
+        if name not in {"confirm", "decline"}:
+            self.clear_pending_actions()
+        self._record_preferences(action)
+        if name == "start_cooking":
+            if state.phase == "cooking" and state.recipe:
+                await self._say(f"We're already cooking {state.recipe.title}, on step {state.current_step_index + 1} of {len(state.recipe.steps)}.")
+            elif state.phase == "planning" and state.recipe:
                 await self._start_cooking()
-                return
-            await self._run_planning(text)
-            return
-
-        nav = resolve_navigation(
-            text,
-            state.recipe,
-            state.current_step_index,
-            max_chars=self._settings.nav_max_chars,
-        )
-        if nav is not None:
-            if nav.kind is NavigationKind.DONE:
-                await self._complete_recipe(text)
+                return True
             else:
-                await self._emit_navigation(nav, text)
-            return
+                await self._say("Let's choose and prepare a recipe first. What would you like to cook?")
+        elif name == "approve_plan":
+            if state.phase == "planning" and state.recipe:
+                await self._say("Glad the plan looks good. Ready to start cooking?")
+                await self._send(protocol.choices([{"id": "start", "label": "Start cooking", "action": {"name": "start_cooking"}}, {"id": "adjust", "label": "Adjust the plan"}]))
+            else:
+                await self._say("What would you like to plan?")
+        elif name == "reset":
+            await self._reset_session("")
+            return True
+        elif name == "parse_recipe":
+            if state.phase == "cooking":
+                await self._say("Please stop this cooking session before replacing the recipe.")
+            elif not action.value:
+                await self._say("Please paste or describe the recipe you'd like to use.")
+            else:
+                await self._handle_user_recipe(action.value)
+                return True
+        elif name == "select_dish":
+            if not action.value or state.phase == "cooking":
+                await self._say("Which dish would you like to plan?")
+            else:
+                self._pending_dish = None
+                await self._handle_server_tool(FunctionCallEvent(name="begin_dish", arguments={"dish": action.value}, call_id=f"call_{uuid.uuid4().hex}"))
+                return True
+        elif name == "cook_now":
+            if self._pending_dish and state.phase != "cooking":
+                self._awaiting_choice = False
+                await self._direct_cook("")
+                return True
+            if state.phase == "cooking":
+                return await self.execute_action(ConversationAction(name="start_cooking"), from_model=True)
+            await self._say("Which dish would you like to cook?")
+        elif name == "plan_together":
+            if state.phase == "cooking":
+                await self._say("We have already started cooking this recipe.")
+            elif not self._pending_dish:
+                await self._say("Which dish would you like to plan?")
+            elif self._discovery.servings is None:
+                self._awaiting_choice = False
+                await self._say("How many servings would you like?")
+                await self._send(protocol.choices([{"id": "two", "label": "2 servings", "action": {"name": "plan_together", "servings": 2}}, {"id": "four", "label": "4 servings", "action": {"name": "plan_together", "servings": 4}}]))
+            else:
+                self._awaiting_choice = False
+                await self._handle_server_tool(FunctionCallEvent(name="create_plan", arguments={"servings": self._discovery.servings}, call_id=f"call_{uuid.uuid4().hex}"))
+                return True
+        elif name in {"discover", "update_preferences", "suggest_now", "change_preferences"}:
+            if name == "update_preferences" and state.phase == "planning" and state.recipe:
+                if from_model:
+                    return False
+                await self._respond("Revise the presented recipe using my updated preferences.", from_voice=False)
+                return True
+            if state.phase == "cooking":
+                await self._say("Would you like to stop this recipe before choosing another dish?")
+            else:
+                if name == "change_preferences":
+                    self._discovery = Discovery(active=True)
+                if state.phase == "done":
+                    state.recipe = None
+                    state.phase = "intake"
+                    state.current_step_index = 0
+                    await self._send(protocol.reset())
+                self._discovery.active = True
+                self._discovery.ready = name == "suggest_now"
+                if await self._ask_discovery_question():
+                    return True
+                if from_model:
+                    if action.options and action.foods:
+                        await self._emit_choices(action.options, [food.model_dump() for food in action.foods], action.question)
+                        return True
+                    # A second tool in this same response may supply dishes.
+                    return False
+                else:
+                    await self._respond("Suggest three matching dishes using my collected preferences. Show other dishes if some were already offered.", from_voice=False)
+                    return True
+        elif name in {"confirm", "decline"}:
+            pending = self._pending_navigation
+            done = self._awaiting_done_confirm
+            self.clear_pending_actions()
+            if pending and state.recipe and pending[1] == state.recipe.id and pending[2] == state.current_step_index:
+                if name == "confirm":
+                    await self._emit_navigation(pending[0], "")
+                    return True
+                await self._say("Okay, staying on this step. Take your time.")
+            elif done and state.phase == "cooking":
+                if name == "confirm":
+                    await self._complete_recipe("")
+                    return True
+                await self._decline_done("")
+                return True
+            else:
+                await self._say("What would you like to continue with?")
+        elif name == "finish":
+            if state.phase == "cooking" and state.recipe:
+                await self._confirm_done("")
+                return True
+            await self._say("There's no active cooking session to finish.")
+        elif name in {"advance_step", "repeat_step", "go_to_step", "skip_to_step"}:
+            recipe = state.recipe
+            if state.phase != "cooking" or not recipe:
+                await self._say("Let's start a prepared recipe before moving between steps.")
+            else:
+                index = (state.current_step_index + 1 if name == "advance_step" else state.current_step_index if name == "repeat_step" else action.step_index)
+                if index is None or index < 0 or index > len(recipe.steps) or (index == len(recipe.steps) and name == "go_to_step"):
+                    await self._say("That step isn't in this recipe. Which step did you mean?")
+                elif index == len(recipe.steps):
+                    if name == "skip_to_step":
+                        await self._complete_recipe("")
+                    else:
+                        await self._confirm_done("")
+                    return True
+                else:
+                    same_step = index == state.current_step_index
+                    tool_name = "repeat_step" if same_step else "advance_step" if name == "advance_step" else "go_to_step"
+                    nav = NavigationResult(
+                        kind=NavigationKind.REPEAT if same_step else NavigationKind.NEXT if name == "advance_step" else NavigationKind.GO_TO,
+                        new_step_index=index,
+                        spoken_text=_format_step(recipe, index),
+                        tool_name=tool_name,
+                        tool_arguments={"from_step_index": state.current_step_index} if tool_name == "advance_step" else {"step_index": index},
+                    )
+                    if name == "skip_to_step":
+                        await self._emit_navigation(nav, "")
+                    else:
+                        await self._request_navigation(nav, "")
+                    return True
+        elif name == "ask_help":
+            if from_model:
+                await self._say(_format_step(state.recipe, state.current_step_index) if state.recipe else "Tell me what you'd like help with.")
+            else:
+                await self._respond("Help me understand the current cooking step.", from_voice=False)
+                return True
+        await self._finish_turn()
+        return True
 
-        await self._run_conversation(text)
+    async def _ask_discovery_question(self) -> bool:
+        question = self._discovery.next_question()
+        if not question:
+            return False
+        line, labels = question
+        await self._say(line)
+        await self._send(protocol.choices([
+            {"id": self._slugify(label), "label": label, "action": {"name": "suggest_now"} if label == "Suggest now" else {"name": "update_preferences", "answers": {self._discovery.pending: label}}}
+            for label in labels
+        ]))
+        await self._finish_turn()
+        return True
 
     # -- intake / planning -------------------------------------------------
+    def _plan_constraints(self, constraints: str | None) -> str | None:
+        values = [self._discovery.constraints(), constraints or ""]
+        return "; ".join(value for value in values if value) or None
+
     async def _handle_user_recipe(self, text: str) -> None:
         """Parse a dictated/pasted recipe and present it as a plan."""
         self._add_turn("user", text)
@@ -866,7 +1127,7 @@ class VoicePipeline:
         self._add_turn("user", user_text)
         try:
             recipe = await self._services.recipes.generate_recipe(
-                self._pending_dish, None, None
+                self._pending_dish, self._discovery.servings, self._plan_constraints(None)
             )
         except AppError as exc:
             await self._send(protocol.error_from_exception(exc))
@@ -892,6 +1153,43 @@ class VoicePipeline:
         await self._start_cooking()
 
     # -- deterministic navigation -----------------------------------------
+    def clear_pending_actions(self) -> None:
+        """Invalidate confirmations on reconnect, replacement or disconnect (§7)."""
+        self._pending_navigation = None
+        self._awaiting_done_confirm = False
+
+    async def shutdown(self) -> None:
+        """Disconnect cancels in-flight work before clearing session answers (§4/§7)."""
+        self._cancel.set()
+        for task in (self._turn_task, self._partial_task, self._continuation_task):
+            if task is not None and task is not asyncio.current_task():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+        self.clear_pending_actions()
+        self._discovery = Discovery()
+        self._pending_calls.clear()
+        self._pending_pcm.clear()
+        self._continuation_pcm.clear()
+        self._turn_pcm = b""
+
+    async def _request_navigation(self, nav: NavigationResult, text: str) -> None:
+        state = self._session.state
+        if nav.new_step_index == state.current_step_index:
+            await self._emit_navigation(nav, text)
+            return
+        self._pending_navigation = (nav, state.recipe.id, state.current_step_index)
+        self._add_turn("user", text)
+        await self._say(
+            f"We're on step {state.current_step_index + 1} of {len(state.recipe.steps)}. "
+            f"Leave this step and go to step {nav.new_step_index + 1}?"
+        )
+        await self._send(protocol.choices([
+            {"id": "continue", "label": "Continue"},
+            {"id": "stay", "label": "Stay here"},
+        ]))
+        await self._finish_turn()
+
     async def _emit_navigation(self, nav: NavigationResult, user_text: str) -> None:
         state = self._session.state
         state.phase = "cooking"
@@ -929,8 +1227,8 @@ class VoicePipeline:
         """Confirm a done cue before completing (architecture §4 completion).
 
         A done cue at/after the final step does not finish immediately: the
-        assistant emits tappable ``choices`` ("Yes, I'm done" / "Not yet") and
-        asks "Ready to finish?", then waits for the next turn.
+        The assistant offers completion choices and warns when steps remain;
+        it waits for confirmation without changing the client's current step.
         """
         self._awaiting_done_confirm = True
         await self._set_state("answering")
@@ -938,12 +1236,16 @@ class VoicePipeline:
         await self._send(
             protocol.choices(
                 [
-                    {"id": "yes", "label": "Yes, I'm done"},
-                    {"id": "not_yet", "label": "Not yet"},
+                    {"id": "yes", "label": "Finish anyway" if self._session.state.current_step_index < len(self._session.state.recipe.steps) - 1 else "Yes, I'm done"},
+                    {"id": "not_yet", "label": "Keep cooking"},
                 ]
             )
         )
-        await self._say("Ready to finish?")
+        state = self._session.state
+        warning = (f"We're on step {state.current_step_index + 1} of {len(state.recipe.steps)}. "
+                   "We're not at the last step yet. Finish anyway or keep cooking?"
+                   if state.current_step_index < len(state.recipe.steps) - 1 else "Ready to finish?")
+        await self._say(warning)
         await self._finish_turn()
 
     async def _decline_done(self, user_text: str) -> None:
@@ -974,6 +1276,7 @@ class VoicePipeline:
         collected: list[str] = []
         seq = state.tts_seq
         got_text = False
+        got_tool = False
 
         try:
             async for event in self._services.gemini.stream_conversation(
@@ -981,6 +1284,7 @@ class VoicePipeline:
                 user_text=text,
                 recipe_context=recipe_context,
                 system_prompt=system_prompt,
+                pending_preference=self._discovery.pending if self._discovery.active and not self._discovery.ready and self._session.state.phase != "cooking" else None,
             ):
                 if self._cancel.is_set():
                     break
@@ -994,17 +1298,25 @@ class VoicePipeline:
                                 break
                             seq = await self._synthesize(sentence, seq)
                 elif isinstance(event, FunctionCallEvent):
+                    got_tool = True
                     # A server tool (create_plan) completes the turn itself; stop
                     # streaming and skip the epilogue (no second Gemini call).
+                    for sentence in chunker.flush():
+                        if not self._cancel.is_set():
+                            seq = await self._synthesize(sentence, seq)
+                    state.tts_seq = seq
+                    if collected:
+                        self._add_turn("assistant", "".join(collected).strip())
+                        collected.clear()
                     if await self._handle_function_call(event):
-                        state.tts_seq = seq
                         return
             if not self._cancel.is_set():
                 for sentence in chunker.flush():
                     seq = await self._synthesize(sentence, seq)
         except AppError as exc:
             await self._send(protocol.error_from_exception(exc))
-            await self._set_state("idle")
+            await self._say("I couldn't understand that request. Could you tell me what you'd like to do?")
+            await self._finish_turn()
             return
         except asyncio.CancelledError:
             raise
@@ -1013,14 +1325,23 @@ class VoicePipeline:
             await self._send(
                 protocol.error(ErrorCode.LLM_TIMEOUT, "The assistant failed to respond.", True)
             )
-            await self._set_state("idle")
+            await self._say("I couldn't understand that request. Could you tell me what you'd like to do?")
+            await self._finish_turn()
             return
 
         state.tts_seq = seq
         full_text = "".join(collected).strip()
         if full_text:
+            self.clear_pending_actions()
             self._add_turn("assistant", full_text)
+        elif not got_text and got_tool:
+            if self._discovery.active and self._discovery.ready:
+                await self._say("I have those preferences. Ready for dish suggestions?")
+                await self._send(protocol.choices([{"id": "suggest_now", "label": "Suggest now", "action": {"name": "suggest_now"}}, {"id": "change_preferences", "label": "Change my preferences", "action": {"name": "change_preferences"}}]))
+            else:
+                await self._say("Let me know what you would like to do next.")
         elif not got_text:
+            await self._say("Could you clarify what you'd like to do next?")
             # No text and no tool call: surface an out-of-scope style nudge.
             await self._send(
                 protocol.error(
@@ -1049,6 +1370,13 @@ class VoicePipeline:
         except AppError as exc:
             await self._send(protocol.error_from_exception(exc))
             return False
+        if event.name in {"advance_step", "go_to_step", "repeat_step"}:
+            current = self._session.state.current_step_index
+            if (event.name == "advance_step" and arguments["from_step_index"] != current) or (event.name == "repeat_step" and arguments["step_index"] != current):
+                await self._say(f"We're on step {current + 1} now. What would you like to do from here?")
+                await self._finish_turn()
+                return True
+            return await self.execute_action(ConversationAction(name=event.name, step_index=arguments.get("step_index")), from_model=True)
         await self._send(protocol.tool_call(event.call_id, event.name, arguments))
         self._add_turn(
             "assistant",
@@ -1063,20 +1391,27 @@ class VoicePipeline:
 
         ``begin_dish`` records a clearly named dish and asks the cook-now vs
         plan-it question; ``create_plan`` builds/revises the structured plan;
-        ``offer_choices`` emits a structured ``choices`` event and speaks the
-        same options. All are valid only during intake/planning: a model-issued
-        call mid-cook is ignored so it can never overwrite the in-progress
-        recipe, regenerate a plan, or inject mid-cook suggestion chips
-        (architecture sections 4 [10] and 9.2).
+        ``offer_choices`` is valid in every phase. Dish selection and plan
+        creation remain forbidden during cooking, protecting the client-owned
+        recipe (architecture sections 4 [10] and 9.2).
         """
-        if event.name not in ("begin_dish", "create_plan", "offer_choices"):
+        if event.name not in ("begin_dish", "create_plan", "offer_choices", "conversation_action"):
             logger.debug("ignoring unhandled server tool %s", event.name)
             return False
-        if self._session.state.phase not in ("intake", "planning"):
+        allowed_phases = ("intake", "planning", "done") if event.name == "begin_dish" else ("intake", "planning")
+        if event.name not in ("offer_choices", "conversation_action") and self._session.state.phase not in allowed_phases:
             logger.debug(
                 "ignoring %s during '%s' phase", event.name, self._session.state.phase
             )
             return False
+        if event.name == "conversation_action":
+            try:
+                action = ConversationAction.model_validate(validate_tool_call(event.name, event.arguments))
+            except (AppError, ValueError):
+                await self._say("I couldn't understand that action. Could you clarify what you'd like to do?")
+                await self._finish_turn()
+                return True
+            return await self.execute_action(action, from_model=True)
         if event.name == "begin_dish" and self._pending_dish:
             # A dish is already known (recorded on an earlier turn), so the
             # cook-now versus plan-it question has already been asked. Re-emitting
@@ -1095,8 +1430,14 @@ class VoicePipeline:
             await self._set_state("idle")
             return True
         if event.name == "begin_dish":
+            self.clear_pending_actions()
             # The model identified a dish: remember it and ask how to proceed.
             # The question is fixed copy and never echoes the user's raw words.
+            if self._session.state.phase == "done":
+                self._session.state.recipe = None
+                self._session.state.phase = "intake"
+                self._session.state.current_step_index = 0
+                await self._send(protocol.reset())
             self._pending_dish = arguments["dish"]
             self._awaiting_choice = True
             await self._send(
@@ -1113,7 +1454,24 @@ class VoicePipeline:
             await self._finish_turn()
             return True
         if event.name == "offer_choices":
-            await self._emit_choices(arguments["options"])
+            self._record_preferences(ConversationAction(name="update_preferences", answers=arguments.get("answers"), servings=arguments.get("servings")))
+            has_foods = bool(arguments.get("foods")) or any(gallery_food(label) for label in arguments["options"])
+            if has_foods and self._session.state.phase != "cooking":
+                self._discovery.active = True
+            if has_foods and self._session.state.phase != "cooking" and self._discovery.pending and not self._discovery.ready:
+                await self._say("Before I suggest dishes, could you clarify that preference so I can keep it with your recipe?")
+                pending = self._discovery.pending
+                await self._send(protocol.choices([
+                    {"id": "use_answer", "label": "Use my answer", "action": {"name": "update_preferences", "answers": {pending: self._current_request[:1000] or "No preference"}}},
+                    {"id": "change_answer", "label": "I'll explain again"},
+                    {"id": "suggest_now", "label": "Suggest now", "action": {"name": "suggest_now"}},
+                ]))
+                await self._finish_turn()
+                return True
+            if has_foods and self._session.state.phase != "cooking" and self._discovery.active and not self._discovery.ready and await self._ask_discovery_question():
+                return True
+            self.clear_pending_actions()
+            await self._emit_choices(arguments["options"], arguments.get("foods", []), arguments.get("question"), arguments.get("actions", []))
             return True
         # ``_pending_dish`` is per-session in-memory and is not restored by the
         # client ``sync`` rebuild on reconnect (architecture section 5/7), so fall
@@ -1121,11 +1479,16 @@ class VoicePipeline:
         # A first-time plan has no recipe yet, so it still uses ``_pending_dish``.
         existing_recipe = self._session.state.recipe
         dish = self._pending_dish or (existing_recipe.title if existing_recipe else "")
+        if not dish:
+            await self._say("Which dish would you like to plan?")
+            await self._finish_turn()
+            return True
+        self.clear_pending_actions()
         try:
             recipe = await self._services.recipes.generate_recipe(
                 dish,
-                arguments.get("servings"),
-                arguments.get("constraints"),
+                arguments.get("servings") or self._discovery.servings,
+                self._plan_constraints(arguments.get("constraints")),
             )
         except AppError as exc:
             await self._send(protocol.error_from_exception(exc))
@@ -1159,13 +1522,35 @@ class VoicePipeline:
             return f"How about {labels[0]} or {labels[1]}?"
         return "How about " + ", ".join(labels[:-1]) + f", or {labels[-1]}?"
 
-    async def _emit_choices(self, options: list[str]) -> None:
+    async def _emit_choices(self, options: list[str], foods: list[dict] | None = None, question: str | None = None, actions: list[dict | None] | None = None) -> None:
         """Emit a ``choices`` event (slugified ids) and speak the options."""
-        payload = [
-            {"id": self._slugify(option), "label": option.strip()} for option in options
-        ]
+        supplied = {food["name"].lower(): food for food in foods or []}
+        payload = []
+        for index, option in enumerate(options[:4]):
+            label = option.strip()
+            choice = {"id": f"{self._slugify(label)}_{index}", "label": label}
+            if actions and index < len(actions) and actions[index]:
+                choice["action"] = actions[index]
+            catalog = gallery_food(label)
+            food = supplied.get(label.lower())
+            if food or catalog:
+                # Only verified gallery links may provide images; model URLs are ignored.
+                preview = dict(food or catalog)
+                for key in ("image_url", "image_credit", "image_source", "image_license"):
+                    preview.pop(key, None)
+                    if catalog and key in catalog:
+                        preview[key] = catalog[key]
+                choice["food"] = preview
+                self._discovery.suggested.append(label)
+            payload.append(choice)
+        if any(choice.get("food") for choice in payload) and self._discovery.active:
+            payload = [choice for choice in payload if choice.get("food")][:3]
+            payload.extend([
+                {"id": "other_dishes", "label": "Show other dishes"},
+                {"id": "change_preferences", "label": "Change my preferences"},
+            ])
         await self._send(protocol.choices(payload))
-        spoken = self._format_choices(options)
+        spoken = question or ("Which dish would you like to explore?" if any(c.get("food") for c in payload) else "What would you like to do next?")
         if spoken:
             await self._say(spoken)
         await self._finish_turn()
@@ -1173,6 +1558,7 @@ class VoicePipeline:
     async def _present_plan(self, recipe: Recipe) -> None:
         """Store the plan, emit the ``plan`` event and speak a natural readback."""
         state = self._session.state
+        self.clear_pending_actions()
         state.recipe = recipe
         state.phase = "planning"
         state.current_step_index = 0
@@ -1180,7 +1566,10 @@ class VoicePipeline:
 
         spoken = self._format_plan(recipe)
         await self._say(spoken)
-        await self._send(protocol.choices([{"id": "start_cooking", "label": "Let's cook"}]))
+        await self._send(protocol.choices([
+            {"id": "start_cooking", "label": "Let's cook"},
+            {"id": "revise_plan", "label": "Adjust the plan", "submit_text": "I'd like to adjust the recipe plan. Ask me what to change."},
+        ]))
         await self._finish_turn()
 
     @staticmethod
@@ -1227,150 +1616,6 @@ class VoicePipeline:
         await self._say(readout)
         await self._finish_turn()
 
-    #: Short confirmation utterances only (< ~40 chars); questions and revisions
-    #: never match so the planning interview keeps the turn.
-    _START_CONFIRMATION_MAX_CHARS = 40
-    _START_CONFIRMATION_RE = re.compile(
-        r"^(?:let'?s\s+(?:cook|start|do\s+it)|lets\s+(?:cook|start)|"
-        r"start(?:\s+cooking)?|cook\s+it|go\s+ahead|proceed|ready|go)"
-        r"(?:\s+(?:then|now|please|chef|ahead))?[.!]?$",
-        re.IGNORECASE,
-    )
-    _REVISION_RE = re.compile(
-        r"\b(add|remove|change|instead|without|replace|swap|substitute|"
-        r"don'?t|do\s+not|what|why|how|when|can\s+you|could\s+you|"
-        r"how\s+about|not\s+\w+)\b",
-        re.IGNORECASE,
-    )
-
-    def _is_start_confirmation(self, text: str) -> bool:
-        """Conservative detector for a short explicit "start cooking" intent."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._START_CONFIRMATION_MAX_CHARS:
-            return False
-        if "?" in stripped or self._REVISION_RE.search(stripped):
-            return False
-        return self._START_CONFIRMATION_RE.match(stripped) is not None
-
-    #: Direct-cook vs plan-together intake choice (architecture section 4 [8]).
-    #: Conservative search patterns so a genuine interview answer is not
-    #: mistaken for a command; the utterance length is bounded too.
-    _DIRECT_COOK_RE = re.compile(
-        r"(?:cook\s+it(?:\s+(?:now|straight\s+away|right\s+away|right\s+now))?|"
-        r"just\s+cook|cook\s+straight\s+away|"
-        r"start\s+cooking(?:\s+(?:now|straight\s+away))?|"
-        r"go\s+ahead(?:\s+and\s+cook)?|straight\s+away)",
-        re.IGNORECASE,
-    )
-    _PLAN_FIRST_RE = re.compile(
-        r"(?:plan\s+it(?:\s+together)?|let'?s\s+plan(?:\s+it)?|"
-        r"plan\s+together|ask\s+me|what\s+do\s+i\s+have|"
-        r"what\s+have\s+i\s+got|walk\s+me\s+through)",
-        re.IGNORECASE,
-    )
-    #: Cancel (planning) and discontinue (cooking) commands are deterministic
-    #: and never reach Gemini (architecture section 4 [13]).
-    _CANCEL_RE = re.compile(
-        r"\b(?:cancel(?:\s+the\s+plan)?|forget\s+it|never\s*mind|start\s+over)\b",
-        re.IGNORECASE,
-    )
-    _DISCONTINUE_RE = re.compile(
-        r"\b(?:stop\s+(?:cooking|the\s+cook|cook)|discontinue|quit|abandon|"
-        r"cancel\s+cooking)\b",
-        re.IGNORECASE,
-    )
-    #: Done cue: confirms before completing (architecture §4 completion). Also
-    #: catches a trailing qualifier ("I'm done with it/that", "finished with it").
-    _DONE_CUE_RE = re.compile(
-        r"^(?:"
-        r"(?:i'?m|i\s+am)\s+(?:all\s+)?done"
-        r"(?:\s+(?:with\s+(?:it|that)|cooking))?|"
-        r"all\s+done|"
-        r"done\s+cooking|"
-        r"(?:i'?m|i\s+am)\s+finished(?:\s+with\s+(?:it|that))?|"
-        r"finished(?:\s+with\s+(?:it|that))?|"
-        r"that'?s\s+it|that\s+is\s+it"
-        r")[.!]?$",
-        re.IGNORECASE,
-    )
-    #: Affirmative for the completion prompt. Matches a bare "yes"/"yeah"/"sure"
-    #: as well as the "Yes, I'm done" chip label (a leading affirmative
-    #: optionally followed by "I'm done", tolerating a comma) and "I'm done"
-    #: alone.
-    _AFFIRMATIVE_RE = re.compile(
-        r"^(?:"
-        r"(?:yes|yeah|yep|yup|sure|affirmative|correct|do\s+it|"
-        r"go\s+ahead|please\s+do)(?:[,\s]+(?:i'?m|i\s+am)\s+done)?|"
-        r"(?:i'?m|i\s+am)\s+done"
-        r")[.!]?$",
-        re.IGNORECASE,
-    )
-    _NEGATIVE_RE = re.compile(
-        r"^(?:no|nope|not\s+yet|not\s+done|i'?m\s+not\s+done|i\s+am\s+not\s+done|"
-        r"wait|hold\s+on|keep\s+going|still\s+cooking)[.!]?$",
-        re.IGNORECASE,
-    )
-    #: Commands are short; bounding length keeps freeform/pasted text (e.g. a
-    #: recipe containing the word "cancel") from being misread as a command.
-    _COMMAND_MAX_CHARS = 60
-
-    def _is_direct_cook(self, text: str) -> bool:
-        """Detect the "cook it straight away" branch of the intake choice."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        return self._DIRECT_COOK_RE.search(stripped) is not None
-
-    def _is_done_cue(self, text: str) -> bool:
-        """Detect a short done cue ("I'm done", "finished"); ignore timers."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        if "timer" in stripped.lower():
-            return False
-        return self._DONE_CUE_RE.match(stripped) is not None
-
-    def _is_affirmative(self, text: str) -> bool:
-        """Detect a short explicit confirmation for the completion prompt."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        return self._AFFIRMATIVE_RE.match(stripped) is not None
-
-    def _is_negative(self, text: str) -> bool:
-        """Detect a short deferral ("Not yet"/"no") for the completion prompt."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        return self._NEGATIVE_RE.match(stripped) is not None
-
-    def _is_plan_first(self, text: str) -> bool:
-        """Detect the "plan it together" branch of the intake choice."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        return self._PLAN_FIRST_RE.search(stripped) is not None
-
-    def _is_cancel(self, text: str) -> bool:
-        """Detect a planning cancel command (deterministic; no Gemini)."""
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        return self._CANCEL_RE.search(stripped) is not None
-
-    def _is_discontinue(self, text: str) -> bool:
-        """Detect a cooking discontinue command, never hijacking timer intents.
-
-        "stop the timer"/"cancel the timer" belong to the timer tool path and
-        must fall through, so any utterance mentioning a timer returns ``False``.
-        """
-        stripped = text.strip()
-        if not stripped or len(stripped) > self._COMMAND_MAX_CHARS:
-            return False
-        if "timer" in stripped.lower():
-            return False
-        return self._DISCONTINUE_RE.search(stripped) is not None
-
     async def _reset_session(self, user_text: str = "") -> None:
         """Return the session to intake and tell the client to clear state.
 
@@ -1379,6 +1624,16 @@ class VoicePipeline:
         keeps the recipe in its local cookbook; the server only drops its
         mirrored copy and re-arms the intake choice.
         """
+        self._input_epoch += 1
+        self._cancel_continuation()
+        self._continuation_pcm.clear()
+        self._pending_pcm.clear()
+        self._pending_utterance_id = None
+        self._utterance_id = None
+        audio = getattr(self._session, "audio", None)
+        if audio is not None:
+            audio.reset_utterance(); audio.clear()
+        self._services.vad.reset()
         state = self._session.state
         if user_text:
             self._add_turn("user", user_text)
@@ -1386,12 +1641,29 @@ class VoicePipeline:
         state.phase = "intake"
         state.current_step_index = 0
         self._pending_dish = ""
+        self.clear_pending_actions()
+        self._discovery = Discovery()
+        state.turns.clear()
         self._awaiting_choice = False
         self._awaiting_done_confirm = False
         await self._send(protocol.reset())
         line = "Okay, back to the start. What are we cooking?"
         await self._say(line)
         await self._finish_turn()
+
+    async def start_tool_result(self, call_id: str, result: dict[str, Any]) -> None:
+        if call_id not in self._pending_calls:
+            return
+        # The previous stream has finished emitting its tools before these
+        # results can arrive. Own continuation work so a new input can cancel it.
+        task = self._turn_task
+        async def continue_reply() -> None:
+            if task is not None and not task.done():
+                await task
+            if call_id in self._pending_calls:
+                await self.handle_tool_result(call_id, result)
+        self._turn_task = asyncio.create_task(continue_reply())
+        self._turn_task.add_done_callback(self._on_turn_done)
 
     async def handle_tool_result(self, call_id: str, result: dict[str, Any]) -> None:
         """Continue the conversation after a client-executed tool result."""
@@ -1436,7 +1708,7 @@ class VoicePipeline:
                 protocol.error(ErrorCode.TTS_FAILED, "Text-to-speech failed.", True)
             )
             return seq
-        if audio:
+        if audio and not self._cancel.is_set():
             await self._send(protocol.assistant_audio(seq, audio))
             seq += 1
         return seq
@@ -1468,9 +1740,32 @@ class VoicePipeline:
         self._services.vad.mark_assistant_speaking(False)
 
     async def _finish_turn(self) -> None:
+        if not self._choices_offered and not self._cancel.is_set() and not self._settings.transcription_only:
+            state = self._session.state
+            if self._pending_navigation:
+                labels = ["Continue", "Stay here"]
+            elif self._awaiting_done_confirm:
+                labels = ["Finish anyway", "Keep cooking"]
+            elif state.phase == "cooking":
+                labels = ["Next step", "Repeat this step", "Help with this step"]
+            elif state.phase == "planning" and state.recipe:
+                labels = ["Let's cook", "Change servings", "Adjust ingredients"]
+            elif state.phase == "done":
+                labels = ["What should I cook next?", "Start over"]
+            elif self._pending_dish and self._awaiting_choice:
+                labels = ["Cook it now", "Let's plan it"]
+            elif self._pending_dish:
+                labels = ["2 servings", "4 servings", "Use my preferences"]
+            else:
+                labels = ["Help me choose a dish", "I have a dish in mind"]
+            await self._send(protocol.choices([
+                {"id": self._slugify(label), "label": label} for label in labels
+            ]))
+        self._choices_offered = False
         self._release_echo_gate()
         await self._set_state("idle")
-        await self._send(protocol.turn_end(str(uuid.uuid4())))
+        await self._send(protocol.turn_end(self._reply_id or str(uuid.uuid4())))
+        self._reply_id = None
 
     async def cancel_speaking(self) -> None:
         """Public barge-in entry point for the ``control`` event."""

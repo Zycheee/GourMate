@@ -8,19 +8,22 @@ import SpeechCheckCard from "./SpeechCheckCard";
 import { useSession } from "../store/session";
 import { bubbleVariants, pressProps, threadVariants } from "../lib/motion";
 import { COPY, UI } from "../lib/copy";
-import type { ChatTurn } from "../types";
+import type { ChatTurn, ConversationAction } from "../types";
 
 function authorLabel(role: ChatTurn["role"]): string {
   return role === "user" ? UI.youName : role === "assistant" ? UI.chefName : "tool";
 }
 
-export default function ChatPanel({ onSendText, active, draft: suppliedDraft, onDraftChange, onMinimize }: {
+export default function ChatPanel({ onSendAction, onSendText, active, draft: suppliedDraft, onDraftChange, onMinimize }: {
   active: boolean; onSendText: (text: string) => void; onShowRecipe: () => void;
+  onSendAction?: (action: ConversationAction, displayText?: string) => void;
   draft?: string; onDraftChange?: (draft: string) => void;
   onMinimize?: () => void;
 }) {
-  const transcript = useSession((s) => s.transcript);
+  const transcript = useSession((s) => s.transcript).filter(turn => turn.role !== "tool");
   const liveCaption = useSession((s) => s.liveCaption);
+  const choices = useSession((s) => s.choices);
+  const followThread = useRef(true);
   const voiceState = useSession((s) => s.voiceState);
 
   const [speechOpen, setSpeechOpen] = useState(false);
@@ -34,12 +37,11 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
   // Keep new messages visible without remounting the conversation on tab changes.
   useEffect(() => {
     const el = threadRef.current;
-    if (!el || !active) return;
-    const reduced =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollTo({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
-  }, [transcript, liveCaption, active]);
+    if (!el || !active || !followThread.current) return;
+    // Instant following avoids treating an intermediate smooth-scroll frame
+    // as the reader scrolling away from the latest reply.
+    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+  }, [transcript, liveCaption, choices, active]);
 
   const copyAll = async (): Promise<void> => {
     const text = transcript.map((t) => `${authorLabel(t.role)}: ${t.text}`).join("\n");
@@ -163,6 +165,7 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
 
   const thread = (
     <div
+      onScroll={(event) => { const el = event.currentTarget; followThread.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
       ref={threadRef}
       id="chat-thread"
       tabIndex={-1}
@@ -184,6 +187,7 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
           <p className="mt-1 max-w-[85%] rounded-[24px] rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2 dark:bg-surface-2 px-4 py-3 text-13 sm:text-14 leading-relaxed text-ink clay-soft">
             {COPY.intakePrompt}
           </p>
+          {active && <ContextChoices onSendText={onSendText} onSendAction={onSendAction} />}
           <p className="mt-3 max-w-[30ch] text-13 leading-relaxed text-ink-muted">Tell me what you have, name a dish, or paste a recipe. We’ll take it from there.</p>
         </motion.div>
       ) : (
@@ -228,6 +232,7 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
                 >
                   {turn.text}
                 </p>
+                {active && !captionPending && turn.id === lastAssistant?.id && transcript[transcript.length - 1]?.role !== "user" && <ContextChoices onSendText={onSendText} onSendAction={onSendAction} />}
               </motion.li>
             )
           )}
@@ -248,6 +253,7 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
               <p className="mt-1 max-w-[85%] rounded-[24px] rounded-tl-sm border border-black/5 dark:border-white/10 bg-surface-2 dark:bg-surface-2 px-4 py-3 text-13 sm:text-14 leading-relaxed text-ink opacity-70 clay-soft">
                 {captionPending}
               </p>
+              {active && <ContextChoices onSendText={onSendText} onSendAction={onSendAction} />}
             </motion.li>
           )}
         </motion.ul>
@@ -261,7 +267,6 @@ export default function ChatPanel({ onSendText, active, draft: suppliedDraft, on
       {speechOpen && <div className="shrink-0 max-h-56 overflow-y-auto"><SpeechCheckCard /></div>}
       {thread}
       <div className="conversation-actions">
-        {active && <ContextChoices onSendText={onSendText} />}
         {composer}
       </div>
       <div aria-live="polite" className="sr-only">{UI.ariaVoiceState[voiceState]}</div>

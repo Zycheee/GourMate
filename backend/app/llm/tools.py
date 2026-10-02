@@ -4,8 +4,8 @@ Two responsibilities:
 
 * Validate Gemini ``functionCall`` arguments against the tool schema before they
   are forwarded to the client (architecture section 9.3, step 2).
-* Resolve pure navigation intents without a second Gemini round-trip
-  (architecture section 4, "Deterministic navigation shortcut").
+* Format deterministic navigation from Recipe. The legacy text resolver remains
+  for compatibility; conversational ingress uses Gemini and validated actions.
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ..errors import AppError, ErrorCode
-from ..schemas import Recipe
+from ..schemas import ConversationAction, FoodPreview, Recipe
 from .prompts import NAVIGATION_TOOLS
 
 logger = logging.getLogger(__name__)
@@ -93,11 +93,17 @@ ChoiceLabel = Annotated[str, Field(min_length=1, max_length=80)]
 class OfferChoicesArgs(_StrictToolArgs):
     """Server-executed structured-choice request (architecture section 9.2).
 
-    The model offers a small discrete set (about five dish suggestions); the
-    server renders them as a ``choices`` event and speaks the same options.
+    The model offers contextual answers/actions or three dishes with previews;
+    the server emits ``choices`` and speaks a short follow-up question.
     """
 
+    answers: dict[Literal["cravings", "dietary", "ingredients", "time"], Annotated[str, Field(min_length=1, max_length=1000)]] | None = None
+    servings: int | None = Field(default=None, ge=1, le=100)
+
     options: list[ChoiceLabel] = Field(min_length=2, max_length=8)
+    foods: list[FoodPreview] = Field(default_factory=list, max_length=3)
+    question: str | None = Field(default=None, min_length=1, max_length=500)
+    actions: list[ConversationAction | None] = Field(default_factory=list, max_length=8)
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +116,7 @@ class ToolSpec:
 
 
 TOOL_REGISTRY: dict[str, ToolSpec] = {
+    "conversation_action": ToolSpec("conversation_action", ConversationAction, "server"),
     "advance_step": ToolSpec("advance_step", AdvanceStepArgs, "client"),
     "repeat_step": ToolSpec("repeat_step", RepeatStepArgs, "client"),
     "go_to_step": ToolSpec("go_to_step", GoToStepArgs, "client"),
@@ -123,7 +130,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
 
 #: Tools executed deterministically by the server; they never become a client
 #: ``tool_call`` event and end the turn once handled (architecture section 9.2).
-SERVER_TOOLS = frozenset({"begin_dish", "create_plan", "offer_choices"})
+SERVER_TOOLS = frozenset({"begin_dish", "create_plan", "offer_choices", "conversation_action"})
 
 
 def new_call_id() -> str:
@@ -153,7 +160,10 @@ def validate_tool_call(name: str, arguments: dict[str, Any] | None) -> dict[str,
             f"Malformed arguments for tool '{name}'.",
             detail=exc.errors(),
         ) from exc
-    return validated.model_dump(exclude_none=True)
+    result = validated.model_dump(exclude_none=True, exclude_unset=True)
+    if isinstance(validated, OfferChoicesArgs) and validated.foods:
+        result["foods"] = [food.model_dump() for food in validated.foods]
+    return result
 
 
 def is_navigation_tool(name: str) -> bool:
@@ -191,7 +201,7 @@ class NavigationResult:
 
 
 _NEXT_RE = re.compile(
-    r"\b(what'?s\s+next|what\s+is\s+next|next\s+step|go\s+next|move\s+on|go\s+on|continue|carry\s+on)\b",
+    r"\b(what'?s\s+next|what\s+is\s+next|next\s+step|go\s+next|move\s+on|go\s+on|continue|carry\s+on|skip\s+(?:(?:this|the|current)\s+)?step)\b",
     re.IGNORECASE,
 )
 _REPEAT_RE = re.compile(

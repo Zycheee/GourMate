@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from app.schemas import ConversationAction
+
 import pytest
 
 from app.config import Settings
@@ -39,9 +41,10 @@ EXPECTED_TOOLS = {
     "begin_dish",
     "create_plan",
     "offer_choices",
+    "conversation_action",
 }
 
-EXPECTED_SERVER_TOOLS = {"begin_dish", "create_plan", "offer_choices"}
+EXPECTED_SERVER_TOOLS = {"begin_dish", "create_plan", "offer_choices", "conversation_action"}
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +358,10 @@ async def test_pipeline_navigation_emits_tool_call_without_gemini(nav_recipe):
     session = _FakeSession(nav_recipe)
     pipeline = VoicePipeline(session, services)
 
-    await pipeline._respond("what's next", from_voice=False)
+    await pipeline.execute_action(ConversationAction(name="advance_step"))
+    assert not any(event["type"] == "tool_call" for event in session.events)
+    assert session.state.current_step_index == 0
+    await pipeline.execute_action(ConversationAction(name="confirm"))
 
     events = session.events
     types = [e["type"] for e in events]

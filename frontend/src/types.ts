@@ -92,6 +92,50 @@ export interface SessionState {
 /* ------------------------------------------------------------------ */
 
 /** §9.2 tool registry — executed client-side (plus the server-side tools). */
+export type FoodImageResponse = {
+  image_url: string | null;
+  image_credit: string | null;
+  image_source: string | null;
+  image_license: string | null;
+}
+
+export type FoodImageRequest = { dish: string };
+
+export type FoodPreview = {
+  name: string;
+  description: string;
+  estimated_total_minutes: number | null;
+  popularity: string;
+  difficulty: "Easy" | "Moderate" | "Advanced";
+  key_ingredients: string[];
+  fit: string;
+  image_url?: string | null;
+  image_credit?: string | null;
+  image_source?: string | null;
+  image_license?: string | null;
+};
+
+export type ActionName = "start_cooking" | "approve_plan" | "cook_now" | "plan_together" | "discover" | "update_preferences" | "suggest_now" | "change_preferences" | "confirm" | "decline" | "finish" | "reset" | "skip_to_step" | "advance_step" | "repeat_step" | "go_to_step" | "select_dish" | "ask_help" | "parse_recipe";
+
+export type ConversationAction = {
+  name: ActionName;
+  value?: string | null;
+  step_index?: number | null;
+  servings?: number | null;
+  answers?: Partial<Record<"cravings" | "dietary" | "ingredients" | "time", string>> | null;
+  options?: string[] | null;
+  foods?: FoodPreview[] | null;
+  question?: string | null;
+};
+
+export type ChoiceOption = {
+  id: string;
+  label: string;
+  submit_text?: string | null;
+  food?: FoodPreview | null;
+  action?: ConversationAction | null;
+};
+
 export type ToolName =
   | "advance_step"
   | "repeat_step"
@@ -101,7 +145,8 @@ export type ToolName =
   | "substitute_ingredient"
   | "begin_dish"
   | "create_plan"
-  | "offer_choices";
+  | "offer_choices"
+  | "conversation_action";
 
 /** §11 error taxonomy. */
 export type ErrorCode =
@@ -139,11 +184,16 @@ export type ClientMessage =
   | { type: "sync"; state: SessionState }
   | {
       type: "control";
-      action: "mute" | "unmute" | "barge_in" | "set_voice";
+      action: "mute" | "unmute" | "barge_in" | "set_voice" | "sleep" | "wake";
       /** edge-tts voice id — required for `set_voice`. */
       voice?: string;
+      wake_listening?: boolean;
+      enable_mic?: boolean;
+      pending_audio?: "submit" | "discard";
+      utterance_id?: string;
     }
   | { type: "text_input"; text: string }
+  | { type: "action_input"; action: ConversationAction }
   | { type: "tool_result"; call_id: string; result: Record<string, unknown> }
   | {
       type: "recipe_state";
@@ -156,14 +206,15 @@ export type ClientMessage =
 /* --------------------------- server → client ---------------------- */
 
 export type ServerMessage =
+  | { type: "activity"; sleeping: boolean; wake_listening: boolean; muted: boolean }
   | { type: "ready"; session_id: string }
-  | { type: "vad"; state: "speech_start" | "speech_end" }
-  | { type: "transcript"; text: string; final: boolean }
-  | { type: "choices"; options: { id: string; label: string }[] }
-  | { type: "assistant_text"; text: string }
-  | { type: "assistant_audio"; seq: number; mime: "audio/mpeg"; data: string }
+  | { type: "vad"; state: "speech_start" | "speech_end"; utterance_id?: string }
+  | { type: "transcript"; text: string; final: boolean; utterance_id?: string }
+  | { type: "choices"; options: ChoiceOption[]; turn_id?: string }
+  | { type: "assistant_text"; text: string; turn_id?: string }
+  | { type: "assistant_audio"; seq: number; mime: "audio/mpeg"; data: string; turn_id?: string }
   | { type: "tool_call"; call_id: string; name: ToolName; arguments: Record<string, unknown> }
-  | { type: "state"; voice_state: ServerVoiceState }
+  | { type: "state"; voice_state: ServerVoiceState; turn_id?: string }
   | { type: "recipe"; recipe: Recipe }
   | { type: "reset" }
   | { type: "plan"; recipe: Recipe }
@@ -197,6 +248,7 @@ export interface Settings {
   /** Preferred edge-tts voice id (see design §5.4 "Voice pick"). */
   voice: string;
   micDeviceId: string | null;
+  voiceWake: boolean;
   timerSound: boolean;
   theme: ThemePreference;
 }

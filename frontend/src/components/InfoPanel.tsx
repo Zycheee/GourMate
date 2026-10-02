@@ -8,10 +8,12 @@ import TimerRings from "./TimerRings";
 import { useSession } from "../store/session";
 import { UI } from "../lib/copy";
 
-export default function InfoPanel({ onSendText, onMinimize }: {
+export default function InfoPanel({ onSendText, onMinimize, onSendAction }: {
   onSendText: (text: string) => void;
+  onSendAction?: (action: import("../types").ConversationAction, displayText?: string) => void;
   onMinimize?: () => void;
 }) {
+  const submit = (name: import("../types").ActionName, label: string) => onSendAction ? onSendAction({ name }, label) : onSendText(label);
   const phase = useSession((s) => s.phase);
   const recipe = useSession((s) => s.recipe);
   const heading = phase === "intake" ? "Something good starts here"
@@ -25,7 +27,7 @@ export default function InfoPanel({ onSendText, onMinimize }: {
         {recipe && <span className="phase-tag">{phase === "planning" ? "Review & adjust" : phase === "cooking" ? "In progress" : phase === "done" ? "Complete" : "Recipe"}</span>}
       </header>
       <div className="recipe-scroll">
-        <div className="recipe-phase-heading">
+        <div className="recipe-phase-heading" hidden={!recipe || phase === "planning"}>
           <p className="workspace-eyebrow">YOUR KITCHEN</p>
           <h1>{heading}</h1>
         </div>
@@ -53,8 +55,8 @@ export default function InfoPanel({ onSendText, onMinimize }: {
             {phase === "cooking" && (
               <div className="cooking-content">
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Cooking controls">
-                  <button className="clay-control rounded-full px-3 py-2 text-12" onClick={() => onSendText(UI.quick.nextText)}>{UI.quick.next}</button>
-                  <button className="clay-control rounded-full px-3 py-2 text-12" onClick={() => onSendText(UI.quick.repeatText)}>{UI.quick.repeat}</button>
+                  <button className="clay-control rounded-full px-3 py-2 text-12" onClick={() => submit("advance_step", UI.quick.next)}>{UI.quick.next}</button>
+                  <button className="clay-control rounded-full px-3 py-2 text-12" onClick={() => submit("repeat_step", UI.quick.repeat)}>{UI.quick.repeat}</button>
                 </div>
                 <StepRail />
                 <StepCard />
@@ -65,7 +67,7 @@ export default function InfoPanel({ onSendText, onMinimize }: {
               <div className="completion-content">
                 <h2>{UI.done.title}</h2>
                 <p>{UI.done.body}</p>
-                <button className="clay-primary" onClick={() => onSendText(UI.plan.stopCookingText)}>{UI.done.action}</button>
+                <button className="clay-primary" onClick={() => submit("reset", UI.done.action)}>{UI.done.action}</button>
                 <IngredientsPanel />
               </div>
             )}
@@ -76,8 +78,9 @@ export default function InfoPanel({ onSendText, onMinimize }: {
         <footer className="recipe-footer">
           <span>{phase === "planning" ? "Make it yours before we begin." : "You can ask for help at any step."}</span>
           <div className="flex flex-wrap items-center gap-2">
-            {phase === "cooking" && <button className="clay-primary" onClick={() => onSendText(UI.plan.doneCookingText)}>{UI.plan.doneCooking}</button>}
-            <button className="quiet-action" onClick={() => onSendText(phase === "planning" ? UI.plan.cancelPlanText : UI.plan.stopCookingText)}>{phase === "planning" ? UI.plan.cancelPlan : UI.plan.stopCooking}</button>
+            {phase === "planning" && <button className="clay-primary" onClick={() => submit("start_cooking", "Start cooking")}>Start cooking</button>}
+            {phase === "cooking" && <button className="clay-primary" onClick={() => submit("finish", UI.plan.doneCooking)}>{UI.plan.doneCooking}</button>}
+            <button className="quiet-action" onClick={() => submit("reset", phase === "planning" ? UI.plan.cancelPlan : UI.plan.stopCooking)}>{phase === "planning" ? UI.plan.cancelPlan : UI.plan.stopCooking}</button>
           </div>
         </footer>
       )}

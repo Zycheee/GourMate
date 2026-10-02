@@ -149,7 +149,9 @@ class FakeAudioContext {
 }
 
 class FakeWorkletNode {
-  port = { onmessage: null as ((event: MessageEvent) => void) | null, close: () => undefined };
+  static latest: FakeWorkletNode;
+  constructor() { FakeWorkletNode.latest = this; }
+  port = { onmessage: null as ((event: MessageEvent) => void) | null, close: () => undefined, postMessage: vi.fn() };
   connect(target: unknown): unknown {
     return target;
   }
@@ -174,6 +176,61 @@ describe("MicCapture.start concurrency", () => {
   afterEach(() => {
     (globalThis as { AudioContext?: unknown }).AudioContext = originalAudioContext;
     (globalThis as { AudioWorkletNode?: unknown }).AudioWorkletNode = originalWorklet;
+  });
+
+
+  it("mute stops tracks immediately and flushes the worklet tail before resolving", async () => {
+    const stream = fakeStream();
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockResolvedValue(stream as unknown as MediaStream);
+    const frames: Int16Array[] = [];
+    const capture = new MicCapture({ onPcm: frame => frames.push(frame) });
+    await capture.start(null);
+    const node = FakeWorkletNode.latest;
+    node.port.onmessage!({ data: new Float32Array(900).fill(0.5) } as MessageEvent);
+    const flushing = capture.stopAndFlush();
+    expect(stream.stop).toHaveBeenCalled();
+    expect(node.port.postMessage).toHaveBeenCalledWith({ type: "flush" });
+    node.port.onmessage!({ data: new Float32Array(180).fill(0.5) } as MessageEvent);
+    node.port.onmessage!({ data: { type: "flushed" } } as MessageEvent);
+    await flushing;
+    expect(frames.reduce((n, f) => n + f.length, 0)).toBe(360);
+    expect(frames[0][0]).toBe(pcm(0.5));
+    capture.stop();
+  });
+
+  it("flush has a 200 ms deadline and keeps samples already received", async () => {
+    vi.useFakeTimers();
+    try {
+      const frames: Int16Array[] = [];
+      const capture = new MicCapture({ onPcm: frame => frames.push(frame) });
+      await capture.start(null);
+      FakeWorkletNode.latest.port.onmessage!({ data: new Float32Array(900).fill(0.5) } as MessageEvent);
+      const flushing = capture.stopAndFlush();
+      let resolved = false;
+      void flushing.then(() => { resolved = true; });
+      await vi.advanceTimersByTimeAsync(199);
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await flushing;
+      expect(frames[0]).toHaveLength(300);
+      capture.stop();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("discard cancels an unfinished flush and fresh capture has no old tail", async () => {
+    const frames: Int16Array[] = [];
+    const capture = new MicCapture({ onPcm: frame => frames.push(frame) });
+    await capture.start(null);
+    FakeWorkletNode.latest.port.onmessage!({ data: new Float32Array(900).fill(0.5) } as MessageEvent);
+    const flushing = capture.stopAndFlush();
+    capture.stop();
+    await flushing;
+    expect(frames).toEqual([]);
+    await capture.start(null);
+    const next = capture.stopAndFlush();
+    FakeWorkletNode.latest.port.onmessage!({ data: { type: "flushed" } } as MessageEvent);
+    await next;
+    expect(frames).toEqual([]);
   });
 
   it("aborts a superseded start so only one capture graph can go live", async () => {

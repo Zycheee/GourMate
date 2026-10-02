@@ -2,7 +2,7 @@
 
 These models reproduce architecture doc sections 6 (data schemas), 7 (WebSocket
 protocol) and 8 (REST bodies) exactly. Do not rename fields or event types
-without updating the architecture document first.
+without updating contracts/ws-events.json first.
 
 Notes on resolved ambiguities are recorded in ``backend/README.md``.
 """
@@ -23,7 +23,11 @@ SessionPhase = Literal["intake", "planning", "cooking", "done"]
 TimerStatus = Literal["active", "paused", "done", "cancelled"]
 ChatRole = Literal["user", "assistant", "tool"]
 VadState = Literal["speech_start", "speech_end"]
-ControlAction = Literal["mute", "unmute", "barge_in", "set_voice"]
+ControlAction = Literal["mute", "unmute", "barge_in", "set_voice", "sleep", "wake"]
+
+
+ActionName = Literal['start_cooking', 'approve_plan', 'cook_now', 'plan_together', 'discover', 'update_preferences', 'suggest_now', 'change_preferences', 'confirm', 'decline', 'finish', 'reset', 'skip_to_step', 'advance_step', 'repeat_step', 'go_to_step', 'select_dish', 'ask_help', 'parse_recipe']
+
 
 
 class Substitution(BaseModel):
@@ -177,11 +181,20 @@ class ControlEvent(_ClientEvent):
     # ``set_voice`` carries the session's edge-tts voice id (validated against
     # the backend allow-list); other actions leave it unset (architecture §7).
     voice: str | None = None
+    wake_listening: bool | None = None
+    enable_mic: bool | None = None
+    pending_audio: Literal["submit", "discard"] | None = None
+    utterance_id: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class TextInputEvent(_ClientEvent):
     type: Literal["text_input"]
     text: str = Field(min_length=1)
+
+
+class ActionInputEvent(_ClientEvent):
+    type: Literal["action_input"]
+    action: ConversationAction
 
 
 class ToolResultEvent(_ClientEvent):
@@ -210,6 +223,7 @@ ClientEvent = Annotated[
         SyncEvent,
         ControlEvent,
         TextInputEvent,
+        ActionInputEvent,
         ToolResultEvent,
         RecipeStateEvent,
     ],
@@ -233,11 +247,63 @@ class _ServerEvent(BaseModel):
     """Base class for server events; subclasses set a literal ``type``."""
 
 
+class FoodImageRequest(BaseModel):
+    dish: str = Field(min_length=1, max_length=120)
+
+
+class FoodImageResponse(BaseModel):
+    image_url: str | None = None
+    image_credit: str | None = None
+    image_source: str | None = None
+    image_license: str | None = None
+
+
+class FoodPreview(BaseModel):
+    """Discovery information only; never recipe state (architecture §6–§7)."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=600)
+    estimated_total_minutes: int | None = Field(ge=1, le=1440)
+    popularity: str = Field(min_length=1, max_length=600)
+    difficulty: Literal["Easy", "Moderate", "Advanced"]
+    key_ingredients: list[str] = Field(min_length=1, max_length=12)
+    fit: str = Field(min_length=1, max_length=600)
+    image_url: str | None = None
+    image_credit: str | None = None
+    image_source: str | None = None
+    image_license: str | None = None
+
+
+class ConversationAction(BaseModel):
+    """Validated conversational intent, executed by the server (§7, §9)."""
+    model_config = ConfigDict(extra="forbid")
+    name: ActionName
+    value: str | None = Field(default=None, max_length=20000)
+    step_index: int | None = Field(default=None, ge=0)
+    servings: int | None = Field(default=None, ge=1, le=100)
+    answers: dict[Literal["cravings", "dietary", "ingredients", "time"], Annotated[str, Field(min_length=1, max_length=1000)]] | None = None
+
+    options: list[Annotated[str, Field(min_length=1, max_length=80)]] | None = Field(default=None, min_length=3, max_length=3)
+    foods: list[FoodPreview] | None = Field(default=None, min_length=3, max_length=3)
+    question: str | None = Field(default=None, max_length=240)
+
+
 class ChoiceOption(BaseModel):
     """One tappable structured choice (architecture §7)."""
 
     id: str
     label: str
+    submit_text: str | None = None
+    food: FoodPreview | None = None
+    action: ConversationAction | None = None
+
+
+class ActivityEvent(_ServerEvent):
+    type: Literal["activity"] = "activity"
+    sleeping: bool
+    wake_listening: bool
+    muted: bool
 
 
 class ReadyEvent(_ServerEvent):
@@ -248,30 +314,34 @@ class ReadyEvent(_ServerEvent):
 class VadEvent(_ServerEvent):
     type: Literal["vad"] = "vad"
     state: VadState
+    utterance_id: str | None = None
 
 
 class TranscriptEvent(_ServerEvent):
     type: Literal["transcript"] = "transcript"
     text: str
     final: bool
+    utterance_id: str | None = None
 
 
 class ChoicesEvent(_ServerEvent):
     """Tappable multiple-choice options (architecture §7, ``offer_choices``).
 
-    Emitted for about-five dish suggestions, the cook-now vs plan-it intake
-    choice, and the completion confirmation. The assistant speaks the same
-    options; tapping a chip sends the chosen ``label`` as the next utterance.
+    Interview answers, three dish previews, contextual actions and confirmations.
+    A food choice opens a preview first; selection submits ``submit_text`` or
+    ``label`` as the next utterance, or its typed action. Preview information is not Recipe state.
     """
 
     type: Literal["choices"] = "choices"
     options: list[ChoiceOption]
 
+    turn_id: str | None = None
 
 class AssistantTextEvent(_ServerEvent):
     type: Literal["assistant_text"] = "assistant_text"
     text: str
 
+    turn_id: str | None = None
 
 class AssistantAudioEvent(_ServerEvent):
     type: Literal["assistant_audio"] = "assistant_audio"
@@ -279,6 +349,7 @@ class AssistantAudioEvent(_ServerEvent):
     mime: Literal["audio/mpeg"] = "audio/mpeg"
     data: str  # base64-encoded MP3
 
+    turn_id: str | None = None
 
 class ToolCallEvent(_ServerEvent):
     type: Literal["tool_call"] = "tool_call"
@@ -291,6 +362,7 @@ class StateEvent(_ServerEvent):
     type: Literal["state"] = "state"
     voice_state: VoiceState
 
+    turn_id: str | None = None
 
 class RecipeEvent(_ServerEvent):
     type: Literal["recipe"] = "recipe"
@@ -344,6 +416,7 @@ class TurnEndEvent(_ServerEvent):
 
 
 ServerEvent = Union[
+    ActivityEvent,
     ReadyEvent,
     VadEvent,
     TranscriptEvent,

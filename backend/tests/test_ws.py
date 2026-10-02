@@ -86,9 +86,8 @@ class FakeGemini:
         return True
 
     async def stream_conversation(self, **kwargs):
-        # Reached only for freeform conversation; emit nothing.
-        if False:  # pragma: no cover
-            yield None
+        from app.llm.gemini import FunctionCallEvent
+        yield FunctionCallEvent(name="conversation_action", arguments={"name": "parse_recipe", "value": kwargs["user_text"]}, call_id="parse")
 
 
 def _build_fake_services(recipe, allowed_origins: str = "*") -> SimpleNamespace:
@@ -134,12 +133,16 @@ def test_ws_text_input_recipe_presents_plan(fake_app, recipe):
                 }
             )
 
-            events = [ws.receive_json() for _ in range(6)]
+            activity = ws.receive_json()
+            assert activity["type"] == "activity"
+            assert activity["sleeping"] is False
+            events = [ws.receive_json() for _ in range(7)]
             assert [e["type"] for e in events] == [
                 "state",
                 "plan",
                 "assistant_text",
                 "state",
+                "choices",
                 "state",
                 "turn_end",
             ]
@@ -151,8 +154,8 @@ def test_ws_text_input_recipe_presents_plan(fake_app, recipe):
             # The deterministic plan readback is captioned as well as spoken.
             assert recipe.title in events[2]["text"]
             assert events[3]["voice_state"] == "answering"
-            assert events[4]["voice_state"] == "idle"
-            assert events[5]["turn_id"]
+            assert events[5]["voice_state"] == "idle"
+            assert events[6]["turn_id"]
 
 
 def test_ws_reconnect_sync_is_accepted_and_applied(fake_app):
@@ -181,14 +184,18 @@ def test_ws_reconnect_sync_is_accepted_and_applied(fake_app):
                     },
                 }
             )
-            ws.send_json({"type": "text_input", "text": "repeat"})
+            ws.send_json({"type": "action_input", "action": {"name": "repeat_step"}})
 
-            events = [ws.receive_json() for _ in range(6)]
+            activity = ws.receive_json()
+            assert activity["type"] == "activity"
+            assert activity["sleeping"] is False
+            events = [ws.receive_json() for _ in range(7)]
             assert [e["type"] for e in events] == [
                 "state",
                 "state",
                 "tool_call",
                 "assistant_text",
+                "choices",
                 "state",
                 "turn_end",
             ]
@@ -224,7 +231,8 @@ def test_ws_tts_failure_does_not_abort_turn(monkeypatch, recipe):
                 }
             )
 
-            events = [ws.receive_json() for _ in range(7)]
+            assert ws.receive_json()["type"] == "activity"
+            events = [ws.receive_json() for _ in range(8)]
             types = [e["type"] for e in events]
             assert types == [
                 "state",
@@ -232,6 +240,7 @@ def test_ws_tts_failure_does_not_abort_turn(monkeypatch, recipe):
                 "assistant_text",
                 "state",
                 "error",
+                "choices",
                 "state",
                 "turn_end",
             ]
@@ -243,7 +252,8 @@ def test_ws_tts_failure_does_not_abort_turn(monkeypatch, recipe):
 RECIPE_TEXT = "Ingredients:\n2 eggs\n1 cup flour\nMix and bake."
 
 
-def test_ws_set_voice_applies_to_subsequent_synthesis(fake_app):
+@pytest.mark.parametrize("voice", ["en-GB-SoniaNeural", "en-US-AvaNeural", "en-US-AndrewNeural", "en-US-EmmaNeural", "en-US-BrianNeural"])
+def test_ws_set_voice_applies_to_subsequent_synthesis(fake_app, voice):
     """A valid ``set_voice`` control makes later synthesis use that voice."""
     services = fake_app.state.services
     with TestClient(fake_app) as client:
@@ -253,7 +263,7 @@ def test_ws_set_voice_applies_to_subsequent_synthesis(fake_app):
                 {
                     "type": "control",
                     "action": "set_voice",
-                    "voice": "en-GB-SoniaNeural",
+                    "voice": voice,
                 }
             )
             ws.send_json({"type": "text_input", "text": RECIPE_TEXT})
@@ -261,7 +271,7 @@ def test_ws_set_voice_applies_to_subsequent_synthesis(fake_app):
                 ws.receive_json()
 
     assert services.tts.synthesized, "the plan readback must have been spoken"
-    assert set(services.tts.voices) == {"en-GB-SoniaNeural"}
+    assert set(services.tts.voices) == {voice}
 
 
 def test_ws_set_voice_unknown_is_ignored(fake_app):
@@ -303,16 +313,17 @@ def test_ws_set_voice_without_voice_field_is_ignored(fake_app):
 # ---------------------------------------------------------------------------
 
 
-def test_tts_preview_returns_mpeg_for_allowed_voice(fake_app):
+@pytest.mark.parametrize("voice", ["en-AU-NatashaNeural", "en-US-AvaNeural", "en-US-AndrewNeural", "en-US-EmmaNeural", "en-US-BrianNeural"])
+def test_tts_preview_returns_mpeg_for_allowed_voice(fake_app, voice):
     samples = b"\xff\xfb\x90\x00preview"
     fake_app.state.services.tts.audio = samples
     with TestClient(fake_app) as client:
-        resp = client.post("/api/tts/preview", json={"voice": "en-AU-NatashaNeural"})
+        resp = client.post("/api/tts/preview", json={"voice": voice})
 
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "audio/mpeg"
     assert resp.content == samples
-    assert fake_app.state.services.tts.voices[-1] == "en-AU-NatashaNeural"
+    assert fake_app.state.services.tts.voices[-1] == voice
 
 
 def test_tts_preview_rejects_unknown_voice(fake_app):
@@ -436,3 +447,36 @@ def test_ws_disallowed_origin_closes_1008(recipe, monkeypatch):
             with pytest.raises(WebSocketDisconnect) as exc:
                 ws.receive_json()
             assert exc.value.code == 1008
+
+
+def test_ws_sleeping_unmute_enables_wake_listening_without_waking(fake_app):
+    with TestClient(fake_app) as client:
+        with client.websocket_connect("/ws/session") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            ws.send_json({"type": "control", "action": "unmute"})
+            assert ws.receive_json() == {"type": "activity", "sleeping": True, "wake_listening": True, "muted": True}
+            ws.send_json({"type": "control", "action": "mute", "pending_audio": "submit", "utterance_id": "silence"})
+            assert ws.receive_json() == {"type": "activity", "sleeping": True, "wake_listening": False, "muted": True}
+            ws.send_json({"type": "control", "action": "unmute"})
+            assert ws.receive_json()["sleeping"] is True
+
+
+def test_ws_typed_start_and_repeated_start_keep_step_one(fake_app, recipe):
+    with TestClient(fake_app) as client:
+        with client.websocket_connect("/ws/session") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "sync", "state": {"session_id": "", "phase": "planning", "recipe": recipe.model_dump(), "current_step_index": 0, "timers": [], "turns": []}})
+            all_events = []
+            for _ in range(2):
+                ws.send_json({"type": "action_input", "action": {"name": "start_cooking"}})
+                events = []
+                while True:
+                    event = ws.receive_json()
+                    events.append(event)
+                    if event["type"] == "turn_end":
+                        break
+                all_events.extend(events)
+            assert len([e for e in all_events if e["type"] == "recipe"]) == 1
+            assert not any(e["type"] == "tool_call" for e in all_events)
+            assert any("already cooking" in e.get("text", "") for e in events)
+            assert not any("Leave this step" in e.get("text", "") for e in all_events)

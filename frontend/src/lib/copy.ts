@@ -58,7 +58,7 @@ export const UI = {
     expand: "Expand panel",
     collapse: "Collapse panel"
   },
-  chefName: "Planner",
+  chefName: "Kef",
   youName: "You",
   retry: "Retry",
   dismiss: "Dismiss",
@@ -220,5 +220,9 @@ export const VOICES: { id: string; label: string }[] = [
   { id: "en-US-AriaNeural", label: "Aria · US" },
   { id: "en-GB-SoniaNeural", label: "Sonia · UK" },
   { id: "en-GB-RyanNeural", label: "Ryan · UK" },
-  { id: "en-AU-NatashaNeural", label: "Natasha · AU" }
+  { id: "en-AU-NatashaNeural", label: "Natasha · AU" },
+  { id: "en-US-AvaNeural", label: "Ava · Expressive · US" },
+  { id: "en-US-AndrewNeural", label: "Andrew · Warm · US" },
+  { id: "en-US-EmmaNeural", label: "Emma · Conversational · US" },
+  { id: "en-US-BrianNeural", label: "Brian · Casual · US" }
 ];

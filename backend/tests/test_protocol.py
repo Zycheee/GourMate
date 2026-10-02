@@ -16,10 +16,14 @@ import pytest
 from app.errors import ErrorCode
 from app.llm.tools import TOOL_REGISTRY
 from app.schemas import (
+    ActionInputEvent,
+    ActivityEvent,
     AssistantAudioEvent,
     AssistantTextEvent,
     ChoiceOption,
     ChoicesEvent,
+    FoodImageRequest,
+    FoodImageResponse,
     ControlAction,
     ControlEvent,
     DoneEvent,
@@ -44,6 +48,7 @@ from app.schemas import (
 from app.ws import protocol
 
 SERVER_EVENT_CLASSES = [
+    ActivityEvent,
     ReadyEvent,
     VadEvent,
     TranscriptEvent,
@@ -62,6 +67,7 @@ SERVER_EVENT_CLASSES = [
 ]
 
 CLIENT_EVENT_CLASSES = [
+    ActionInputEvent,
     StartEvent,
     SyncEvent,
     ControlEvent,
@@ -73,6 +79,12 @@ CLIENT_EVENT_CLASSES = [
 
 def _payload(raw: str) -> dict:
     return json.loads(raw)
+
+
+def test_food_image_rest_contract(contract):
+    shape = contract["food_image_lookup"]
+    assert set(FoodImageRequest.model_fields) == set(shape["request_required"])
+    assert set(FoodImageResponse.model_fields) == set(shape["response_required"])
 
 
 def _event_type(cls) -> str:
@@ -275,3 +287,44 @@ def test_parse_client_event_rejects_extra_fields():
 
     with pytest.raises(ValidationError):
         parse_client_event({"type": "start", "extra": True})
+
+
+def test_activity_and_reply_identity_contract(contract):
+    payload = _payload(protocol.activity(True, True, True))
+    assert set(payload) == {"type", *contract["activity"]["required"]}
+    for event in (AssistantTextEvent, AssistantAudioEvent, ChoicesEvent, StateEvent):
+        assert "turn_id" in event.model_fields
+    assert {"voice", "wake_listening", "enable_mic", "pending_audio", "utterance_id"} == set(contract["control_optional"])
+
+
+def test_contextual_actions_and_utterance_identity_match_manifest(contract):
+    from app.schemas import ActionName, ConversationAction, parse_client_event
+    from app.llm.prompts import TOOL_DECLARATIONS
+    assert set(typing.get_args(ActionName)) == set(contract["action_names"])
+    shape = contract["conversation_action"]
+    assert set(ConversationAction.model_fields) == set(shape["required"] + shape["optional"])
+    assert {n for n, f in ConversationAction.model_fields.items() if f.is_required()} == set(shape["required"])
+    declaration = next(d for d in TOOL_DECLARATIONS if d["name"] == "conversation_action")
+    assert set(declaration["parameters"]["properties"]) == set(ConversationAction.model_fields)
+    assert set(declaration["parameters"]["properties"]["name"]["enum"]) == set(contract["action_names"])
+    for event in (VadEvent, TranscriptEvent):
+        assert not event.model_fields[contract["utterance_identity"]["optional_field"]].is_required()
+    assert _payload(protocol.transcript("hello", True, "recording"))["utterance_id"] == "recording"
+    assert _payload(protocol.vad("speech_start", "recording"))["utterance_id"] == "recording"
+    assert "utterance_id" not in _payload(protocol.transcript("hello", True))
+    assert "utterance_id" not in _payload(protocol.vad("speech_start"))
+    assert parse_client_event({"type": "action_input", "action": {"name": "start_cooking"}}).action.name == "start_cooking"
+    assert parse_client_event({"type": "control", "action": "mute"}).pending_audio is None
+    for policy in contract["pending_audio_policies"]:
+        assert parse_client_event({"type": "control", "action": "mute", "pending_audio": policy}).pending_audio == policy
+
+
+def test_offer_choices_argument_schema_matches_golden(contract):
+    from app.llm.prompts import TOOL_DECLARATIONS
+    fields = TOOL_REGISTRY["offer_choices"].model.model_fields
+    shape = contract["offer_choices_args"]
+    assert set(fields) == set(shape["required"] + shape["optional"])
+    assert {key for key, field in fields.items() if field.is_required()} == set(shape["required"])
+    parameters = next(tool["parameters"] for tool in TOOL_DECLARATIONS if tool["name"] == "offer_choices")
+    assert set(parameters["properties"]) == set(fields)
+    assert set(parameters["required"]) == set(shape["required"])

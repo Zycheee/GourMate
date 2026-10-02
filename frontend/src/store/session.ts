@@ -10,6 +10,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
+  ChoiceOption,
   ChatTurn,
   ConnectionStatus,
   KitchenTimer,
@@ -25,6 +26,7 @@ import { loadTimers, recomputeTimers, saveTimers } from "../lib/timers";
 const DEFAULT_SETTINGS: Settings = {
   voice: "en-US-JennyNeural",
   micDeviceId: null,
+  voiceWake: false,
   timerSound: true,
   theme: "auto"
 };
@@ -70,7 +72,10 @@ export interface SessionStore {
   /** Immersive cook mode (cards hidden, step card enlarged) — ephemeral. */
   focusMode: boolean;
   /** Offered multiple-choice chips (`choices` event) — ephemeral, never persisted. */
-  choices: { id: string; label: string }[] | null;
+  choices: ChoiceOption[] | null;
+  sleeping: boolean;
+  wakeListening: boolean;
+  lastInteractionAt: number;
 
   /* ---- actions ---- */
   setPhase: (phase: SessionPhase) => void;
@@ -96,8 +101,10 @@ export interface SessionStore {
   setChatOpen: (open: boolean) => void;
   setInfoOpen: (open: boolean) => void;
   setFocusMode: (on: boolean) => void;
-  setChoices: (choices: { id: string; label: string }[] | null) => void;
+  setChoices: (choices: ChoiceOption[] | null) => void;
   setMuted: (muted: boolean) => void;
+  setActivity: (sleeping: boolean, wakeListening: boolean, muted?: boolean) => void;
+  touchActivity: () => void;
   setSettings: (patch: Partial<Settings>) => void;
   setOnboarded: (onboarded: boolean) => void;
   /** Full SessionState snapshot for `sync` / `recipe_state` messages. */
@@ -115,7 +122,7 @@ export const useSession = create<SessionStore>()(
       currentStepIndex: 0,
       timers: [],
       transcript: [],
-      muted: false,
+      muted: true,
       settings: DEFAULT_SETTINGS,
       onboarded: false,
 
@@ -133,6 +140,9 @@ export const useSession = create<SessionStore>()(
       infoOpen: false,
       focusMode: false,
       choices: null,
+      sleeping: true,
+      wakeListening: false,
+      lastInteractionAt: Date.now(),
 
       setPhase: (phase) => set({ phase }),
 
@@ -212,6 +222,8 @@ export const useSession = create<SessionStore>()(
       setFocusMode: (focusMode) => set({ focusMode }),
       setChoices: (choices) => set({ choices }),
       setMuted: (muted) => set({ muted }),
+      setActivity: (sleeping, wakeListening, muted) => set({ sleeping, wakeListening, ...(muted === undefined ? {} : { muted }), lastInteractionAt: Date.now() }),
+      touchActivity: () => set({ lastInteractionAt: Date.now() }),
 
       setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
       setOnboarded: (onboarded) => set({ onboarded }),
@@ -274,7 +286,10 @@ export const useSession = create<SessionStore>()(
           currentStepIndex: p.currentStepIndex ?? currentState.currentStepIndex,
           timers: p.timers ?? currentState.timers,
           transcript: p.transcript ?? currentState.transcript,
-          muted: p.muted ?? currentState.muted,
+          muted: true,
+          sleeping: true,
+          wakeListening: false,
+          lastInteractionAt: Date.now(),
           settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) },
           onboarded: p.onboarded ?? currentState.onboarded,
 
@@ -317,6 +332,8 @@ export const useSession = create<SessionStore>()(
           setFocusMode: currentState.setFocusMode,
           setChoices: currentState.setChoices,
           setMuted: currentState.setMuted,
+          setActivity: currentState.setActivity,
+          touchActivity: currentState.touchActivity,
           setSettings: currentState.setSettings,
           setOnboarded: currentState.setOnboarded,
           sessionSnapshot: currentState.sessionSnapshot,

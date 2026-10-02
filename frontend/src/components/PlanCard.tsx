@@ -24,15 +24,15 @@ export default function PlanCard() {
           <h3>{UI.plan.ingredients}<span>{recipe.ingredients.length}</span></h3>
           <ul>{recipe.ingredients.map((ingredient) => <li key={ingredient.id}><span className="ingredient-dot" aria-hidden="true" /><span>{ingredient.display}</span></li>)}</ul>
         </section>
-        <section className="recipe-method">
-          <h3>The plan<span>{recipe.steps.length} steps</span></h3>
+        <details className="recipe-method" key={recipe.id}>
+          <summary>Steps <span>{recipe.steps.length} steps</span></summary>
           <ol>{recipe.steps.map((step) => (
             <li key={step.index}>
               <span className="method-number">{step.index + 1}</span>
               <div><p>{step.instruction}</p>{step.duration_seconds != null && <span className="method-duration"><Clock3 size={12} aria-hidden="true" /> {Math.round(step.duration_seconds / 60)} min</span>}</div>
             </li>
           ))}</ol>
-        </section>
+        </details>
       </div>
     </motion.section>
   );

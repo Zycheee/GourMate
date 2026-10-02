@@ -33,10 +33,12 @@ const CARDS = [
 
 export default function Onboarding({
   onAllowMic,
-  onStart
+  onStart,
+  onUseText
 }: {
   onAllowMic: () => Promise<void>;
   onStart: () => void;
+  onUseText?: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
@@ -90,6 +92,7 @@ export default function Onboarding({
         >
           {card.action}
         </motion.button>
+        {index === 0 && onUseText && <button type="button" className="mt-3 text-13 underline" onClick={onUseText}>Use text instead</button>}
 
         <div className="mt-5 flex items-center gap-1.5" aria-hidden="true">
           {CARDS.map((_, i) => (

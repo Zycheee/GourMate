@@ -3,7 +3,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion, useReducedMotion, type MotionStyle } from "framer-motion";
 import { BookOpen, ChevronDown, ChevronUp, ChefHat, MessageCircle, Maximize2, Minimize2, Power, Settings2, Volume2, X } from "lucide-react";
-import ContextChoices from "./components/ContextChoices";
 import ChatPanel from "./components/ChatPanel";
 import Confetti from "./components/Confetti";
 import ErrorToast from "./components/ErrorToast";
@@ -20,6 +19,7 @@ import { UI } from "./lib/copy";
 import { pressProps, spring } from "./lib/motion";
 import { applyAccentTheme, MODEL_COLOR, resolveTheme } from "./lib/theme";
 import { isAudioUnlocked, resumeAudioContext } from "./lib/audio";
+import type { ConversationAction } from "./types";
 
 // The 3D avatar (three + @react-three + @react-spring) is the heaviest part of
 // the bundle. Load it on demand so the entry chunk ships without it; the app
@@ -89,7 +89,7 @@ function useApplyTheme(): void {
 function useGlobalShortcuts(
   toggleMute: () => void,
   interrupt: () => void,
-  sendText: (text: string) => void,
+  sendAction: (action: ConversationAction, displayText?: string) => void,
   dialogsOpen: boolean
 ): void {
   useEffect(() => {
@@ -122,14 +122,14 @@ function useGlobalShortcuts(
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (useSession.getState().phase !== "cooking") return;
       if (e.key === "n" || e.key === "N") {
-        sendText(UI.quick.nextText);
+        sendAction({ name: "advance_step" }, UI.quick.nextText);
       } else if (e.key === "r" || e.key === "R") {
-        sendText(UI.quick.repeatText);
+        sendAction({ name: "repeat_step" }, UI.quick.repeatText);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleMute, interrupt, sendText, dialogsOpen]);
+  }, [toggleMute, interrupt, sendAction, dialogsOpen]);
 }
 
 /**
@@ -171,6 +171,7 @@ export default function App() {
   const phase = useSession((s) => s.phase);
   const recipe = useSession((s) => s.recipe);
   const voiceState = useSession((s) => s.voiceState);
+  const sleeping = useSession((s) => s.sleeping);
   const onboarded = useSession((s) => s.onboarded);
   const setOnboarded = useSession((s) => s.setOnboarded);
   const micDeviceId = useSession((s) => s.settings.micDeviceId);
@@ -180,7 +181,7 @@ export default function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const { start, sendText, toggleMute, setVoice, restartMic, disconnect, interrupt } = useVoiceSession();
+  const { start, sendText, sendAction, toggleMute, setVoice, restartMic, disconnect, interrupt, wake, setVoiceWake } = useVoiceSession();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [workspaceTab, setWorkspaceTab] = useState<"chat" | "recipe">("chat");
   const [chatDraft, setChatDraft] = useState("");
@@ -192,8 +193,13 @@ export default function App() {
   const reducedMotion = useReducedMotion();
   const { progress, presentationRef, portraitRef } = useChefLayout(chatOpen, reducedMotion);
   const recipeProgress = usePanelProgress(recipeOpen, reducedMotion);
-  const hasChoices = useSession((s) => Boolean(s.choices?.length));
-  const choicesProgress = usePanelProgress(hasChoices, reducedMotion);
+  const choices = useSession((s) => s.choices);
+  useEffect(() => {
+    // Confirmations must remain visible even when the cooking tab is active.
+    if (choices?.some(choice => ["continue", "stay", "yes", "not_yet"].includes(choice.id))) {
+      setChatOpen(true); setWorkspaceTab("chat");
+    }
+  }, [choices]);
   const panelsPresent = useClosingSurface(chatOpen, progress);
   const recipePresent = useClosingSurface(recipeOpen, recipeProgress);
   const previousPhase = useRef(phase);
@@ -220,7 +226,7 @@ export default function App() {
   }, [phase, setFocusMode]);
   useApplyTheme();
   useAccentTheme();
-  useGlobalShortcuts(toggleMute, interrupt, sendText, settingsOpen || !onboarded);
+  useGlobalShortcuts(toggleMute, interrupt, sendAction, settingsOpen || !onboarded);
 
   // Prevent horizontal scroll jumps when offscreen elements mount/focus
   useEffect(() => {
@@ -273,7 +279,7 @@ export default function App() {
     // Conversational cancel (§7 `reset`): send the discontinue line and let the
     // server's `reset` event bring the app back to intake, so the farewell
     // turn still lands. Phase-aware so the same control can serve planning.
-    sendText(phase === "planning" ? UI.plan.cancelPlanText : UI.plan.stopCookingText);
+    sendAction({ name: "reset" }, phase === "planning" ? UI.plan.cancelPlanText : UI.plan.stopCookingText);
   }, [phase, sendText]);
 
   /** Explicit gesture for the "Tap to enable sound" affordance. */
@@ -301,18 +307,16 @@ export default function App() {
   const avatarLayer = (
     <div className="chef-stage">
       <div className="chef-stage-caption">
-        <span className="stage-eyebrow">Your kitchen companion</span>
-        <span className="stage-state">{UI.ariaVoiceState[voiceState]}</span>
+        <span className="stage-eyebrow">Kef, your kitchen companion</span>
+        <span className="stage-state">{sleeping ? "Asleep · Tap Kef to wake" : UI.ariaVoiceState[voiceState]}</span>
       </div>
       <div className="chef-presentation" ref={presentationRef}>
       <div className="chef-portrait" ref={portraitRef}>
         <Suspense fallback={<AvatarFallback />}><Avatar3D /></Suspense>
+        {sleeping && <button type="button" className="kef-wake-target" aria-label="Wake Kef" onClick={() => wake()} />}
       </div>
       </div>
       {phase === "done" && <Confetti />}
-      <div className="chef-choice-slot">
-        {!chatOpen && <div className="chef-choices"><ContextChoices onSendText={sendText} /></div>}
-      </div>
       <div className="chef-voice"><MicStatus onToggleMute={toggleMute} /></div>
     </div>
   );
@@ -423,8 +427,8 @@ export default function App() {
         <ErrorToast onRetry={() => void start()} />
       </div>
 
-      <motion.main className="avatar-workspace" data-focus={focusMode} data-expanded={avatarExpanded} data-choices={hasChoices}
-        style={{ "--panel-progress": progress, "--recipe-progress": recipeProgress, "--choices-progress": choicesProgress } as MotionStyle}>
+      <motion.main className="avatar-workspace" data-focus={focusMode} data-expanded={avatarExpanded}
+        style={{ "--panel-progress": progress, "--recipe-progress": recipeProgress } as MotionStyle}>
         {avatarLayer}
         {isDesktop ? <>
           <nav className="folder-rail" aria-label="Workspace panels">
@@ -441,11 +445,11 @@ export default function App() {
           </button>}
           <div className="content-panels" data-chat-open={chatOpen} data-recipe-open={recipeOpen}>
             <div id="chat-workspace" className="panel-body chat-side">
-              <ChatPanel draft={chatDraft} onDraftChange={setChatDraft} active={chatOpen} onSendText={sendText} onShowRecipe={() => setRecipeOpen(true)}
+              <ChatPanel onSendAction={sendAction} draft={chatDraft} onDraftChange={setChatDraft} active={chatOpen} onSendText={sendText} onShowRecipe={() => setRecipeOpen(true)}
                 onMinimize={() => { setChatOpen(false); requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Conversation"]')?.focus()); }} />
             </div>
             <div id="recipe-workspace" className="panel-body recipe-side" hidden={!recipePresent} aria-hidden={!recipeOpen} ref={el => { if (el) el.inert = !recipeOpen; }}>
-              <InfoPanel onSendText={sendText} onMinimize={() => { setRecipeOpen(false); requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Recipe"]')?.focus()); }} />
+              <InfoPanel onSendAction={sendAction} onSendText={sendText} onMinimize={() => { setRecipeOpen(false); requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Recipe"]')?.focus()); }} />
             </div>
           </div>
           </div>
@@ -472,20 +476,22 @@ export default function App() {
           </div>
           <div id="drawer-content" className="drawer-content" hidden={!drawerOpen}>
             <div id="chat-workspace" role="tabpanel" aria-labelledby="chat-tab" className="panel-body" hidden={workspaceTab !== "chat"}>
-              <ChatPanel draft={chatDraft} onDraftChange={setChatDraft} active={drawerOpen && workspaceTab === "chat"} onSendText={sendText} onShowRecipe={() => setWorkspaceTab("recipe")} />
+              <ChatPanel onSendAction={sendAction} draft={chatDraft} onDraftChange={setChatDraft} active={drawerOpen && workspaceTab === "chat"} onSendText={sendText} onShowRecipe={() => setWorkspaceTab("recipe")} />
             </div>
             <div id="recipe-workspace" role="tabpanel" aria-labelledby="recipe-tab" className="panel-body" hidden={workspaceTab !== "recipe"}>
-              <InfoPanel onSendText={sendText} />
+              <InfoPanel onSendAction={sendAction} onSendText={sendText} />
             </div>
-            {drawerOpen && workspaceTab === "recipe" && <ContextChoices onSendText={sendText} />}
           </div>
         </div>}
       </motion.main>
 
       {/* Dialogs stay viewport-fixed overlays. */}
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} onVoiceWakeChange={setVoiceWake} />
 
-      {!onboarded && <Onboarding onAllowMic={handleAllowMic} onStart={handleStart} />}
+      {!onboarded && <Onboarding onAllowMic={handleAllowMic} onStart={handleStart} onUseText={() => {
+        useSession.getState().setMuted(true);
+        handleStart();
+      }} />}
     </div>
     </MotionConfig>
   );

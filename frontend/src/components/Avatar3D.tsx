@@ -1,3 +1,4 @@
+import { fitRingScale } from "../lib/effectBounds";
 /**
  * Avatar3D — the character is the status system (design §1, §3, §4).
  *
@@ -256,7 +257,6 @@ const HAT_SEAT_Y = 0.4;
 const HOVER_LEAVE_MS = 70;
 const HOVER_REARM_MS = 700;
 /** Sleep state inactivity threshold: 1 minute of user unresponsiveness */
-const SLEEP_IDLE_TIMEOUT_MS = 60_000;
 
 // Body (superellipsoid blob). Depth +~20% for a fuller side profile.
 const BODY_W = 0.98;
@@ -374,9 +374,8 @@ function AvatarFigure({
 
   const zzzGroupRef = useRef<THREE.Group>(null);
   const zzzRefs = useRef<Array<THREE.Mesh | null>>([]);
-  const [sleeping, setSleeping] = useState(false);
-  const sleepAmt = useRef(0); // 0 = awake, 1 = fully asleep
-  const lastActiveRef = useRef(Date.now());
+  const sleeping = useSession((s) => s.sleeping);
+  const sleepAmt = useRef(sleeping ? 1 : 0); // 0 = awake, 1 = fully asleep
   const hatRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const keyRef = useRef<THREE.PointLight>(null);
@@ -748,34 +747,6 @@ function AvatarFigure({
   ]);
 
   // The avatar sleeps and floats zzz when idle, and wakes up exactly when active
-  const userSpeaking = useSession((s) => s.userSpeaking);
-  const isActive = voiceState !== "idle" || userSpeaking;
-  const idleTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (isActive) {
-      if (idleTimerRef.current) {
-        window.clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = null;
-      }
-      setSleeping(false);
-      lastActiveRef.current = Date.now();
-    } else {
-      // Settle to sleep after 1 minute of user unresponsiveness
-      if (idleTimerRef.current) {
-        window.clearTimeout(idleTimerRef.current);
-      }
-      idleTimerRef.current = window.setTimeout(() => {
-        setSleeping(true);
-      }, SLEEP_IDLE_TIMEOUT_MS);
-    }
-    return () => {
-      if (idleTimerRef.current) {
-        window.clearTimeout(idleTimerRef.current);
-      }
-    };
-  }, [isActive]);
-
   // Reset doneExplaining whenever step changes or leaving cooking phase
   useEffect(() => {
     doneExplainingRef.current = false;
@@ -809,24 +780,14 @@ function AvatarFigure({
   const lookY = useRef(0);
 
   useEffect(() => {
+    if (sleeping) { pointerRef.current = { x: 0, y: 0 }; return; }
     const onMove = (e: PointerEvent): void => {
       pointerRef.current.x = (e.clientX / window.innerWidth) * 2 - 1;
       pointerRef.current.y = -((e.clientY / window.innerHeight) * 2 - 1);
-      lastActiveRef.current = Date.now();
-
-      // Reset the 1-minute inactivity timer on cursor movement if currently awake
-      if (!sleeping && !isActive) {
-        if (idleTimerRef.current) {
-          window.clearTimeout(idleTimerRef.current);
-        }
-        idleTimerRef.current = window.setTimeout(() => {
-          setSleeping(true);
-        }, SLEEP_IDLE_TIMEOUT_MS);
-      }
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
-  }, [sleeping, isActive]);
+  }, [sleeping]);
 
   const cur = useRef({
     leanX: 0,
@@ -934,37 +895,8 @@ function AvatarFigure({
 
   const onReact = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
-    lastActiveRef.current = Date.now();
-    if (sleeping) {
-      setSleeping(false);
-      if (idleTimerRef.current) {
-        window.clearTimeout(idleTimerRef.current);
-      }
-      idleTimerRef.current = window.setTimeout(() => {
-        setSleeping(true);
-      }, SLEEP_IDLE_TIMEOUT_MS);
-      timers.current.hatKick = 0.8;
-      if (!reduced) {
-        void interactApi.start({
-          scale: 1.1,
-          config: BOUNCE,
-          onRest: () => {
-            void interactApi.start({
-              scale: hover.current.over ? HOVER_SCALE : 1,
-              config: BOUNCE
-            });
-          }
-        });
-      }
-      return;
-    }
-    // Reset inactivity sleep timer on interaction
-    if (idleTimerRef.current) {
-      window.clearTimeout(idleTimerRef.current);
-    }
-    idleTimerRef.current = window.setTimeout(() => {
-      setSleeping(true);
-    }, SLEEP_IDLE_TIMEOUT_MS);
+    if (sleeping) return;
+    useSession.getState().touchActivity();
     // Play `^ ^` once per click session — never restart mid-sequence (spam
     // clicking used to force `closing` every frame, hiding the eyes entirely).
     if (eyeSeq.current.phase === "idle") triggerEyes();
@@ -1027,7 +959,7 @@ function AvatarFigure({
     return () => {
       for (const id of ids) window.clearTimeout(id);
     };
-  }, [phase, triggerEyes, reduced, interactApi, startSpin]);
+  }, [phase, sleeping, triggerEyes, reduced, interactApi, startSpin]);
 
   // Both effects fire only on a *genuine* enter (`over` flips false only after
   // the short leave-debounce, so sliding across the body's child meshes never
@@ -1044,9 +976,18 @@ function AvatarFigure({
   }, []);
 
   useEffect(() => clearLeave, [clearLeave]);
+  useEffect(() => {
+    if (!sleeping) return;
+    clearLeave();
+    hover.current.over = false;
+    setHovered(false);
+    timers.current.squish = -1;
+    void interactApi.start({ scale: 1 });
+  }, [sleeping, clearLeave, interactApi]);
 
   const onHoverIn = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
+    if (sleeping) return;
     clearLeave();
     if (hover.current.over) return;
     hover.current.over = true;
@@ -1182,8 +1123,8 @@ function AvatarFigure({
     const py = pointerRef.current.y;
     const isCookingAction = phase === "cooking" && !sleeping;
 
-    const tLookX = ambient ? px * 0.35 : 0;
-    const tLookY = ambient ? -py * 0.18 : 0;
+    const tLookX = ambient && !sleeping ? px * 0.35 : 0;
+    const tLookY = ambient && !sleeping ? -py * 0.18 : 0;
     lookX.current = damp(lookX.current, tLookX, 3.5, dt);
     lookY.current = damp(lookY.current, tLookY, 3.5, dt);
 
@@ -1618,7 +1559,8 @@ function AvatarFigure({
       if (on) {
         rippleRef.current.children.forEach((child, i) => {
           const p = (t * 0.8 + i / 3) % 1;
-          child.scale.setScalar(0.55 + p * 1.5);
+          const bounds = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 0.14, -0.34));
+          child.scale.setScalar(fitRingScale(0.4, 0.55 + p * 1.5, bounds.width, bounds.height));
           (child as THREE.Mesh).visible = true;
           ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity =
             (1 - p) * (0.22 + micLevel * 0.6);
@@ -1660,7 +1602,8 @@ function AvatarFigure({
         tm.tada += dt / 0.9;
         const p = Math.min(1, tm.tada);
         burstRef.current.visible = true;
-        burstRef.current.scale.setScalar(0.3 + p * 2.2);
+        const bounds = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 0.1, 0.2));
+        burstRef.current.scale.setScalar(fitRingScale(0.62, 0.3 + p * 2.2, bounds.width, bounds.height));
         (burstRef.current.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - p);
         if (p >= 1) {
           tm.tada = -1;

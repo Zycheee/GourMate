@@ -56,7 +56,7 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
-export default function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SettingsSheet({ open, onClose, onVoiceWakeChange }: { open: boolean; onClose: () => void; onVoiceWakeChange: (enabled: boolean) => void }) {
   const settings = useSession((s) => s.settings);
   const setSettings = useSession((s) => s.setSettings);
   const connection = useSession((s) => s.connection);
@@ -211,6 +211,10 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
               )}
             </div>
 
+            <Row label="Voice wake" hint="Listen for Hey Kef while asleep">
+              <SquishSwitch checked={settings.voiceWake} onChange={onVoiceWakeChange} label="Voice wake" />
+            </Row>
+            <p className="text-11 text-ink-muted">Voice wake keeps the microphone on while Kef sleeps. Muting stops all listening.</p>
             <Row label={UI.microphone}>
               <select
                 value={settings.micDeviceId ?? ""}

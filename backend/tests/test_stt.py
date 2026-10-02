@@ -246,3 +246,11 @@ async def test_transcribe_forwards_hotwords():
 
     _audio, kwargs = model.calls[0]
     assert kwargs["hotwords"] == "adobo, sinigang"
+
+async def test_short_wake_uses_name_bias_without_long_culinary_prompt():
+    stt, model = _loaded_stt(hotwords="adobo, sinigang", initial_prompt="A long culinary glossary")
+    await stt.transcribe_wake(np.zeros(6400, dtype=np.int16).tobytes())
+    _audio, kwargs = model.calls[-1]
+    assert "Keef" in kwargs["hotwords"] and "Kef" in kwargs["hotwords"]
+    assert "adobo" not in kwargs["hotwords"]
+    assert kwargs["initial_prompt"] is None

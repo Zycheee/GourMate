@@ -1,14 +1,61 @@
-# GourMate (ChefSight)
+# GourMate (Kef)
 
 GourMate is a hands-free voice cooking assistant for cooks whose hands are wet,
 oily, or otherwise busy. It keeps the recipe state, reads steps aloud, runs
 labeled kitchen timers, handles mid-cook emergencies, and suggests substitutions
-— all through an always-listening voice loop with barge-in. The procedural 3D
-chef avatar **ChefSight** is the status display, so there are no spinners to
+— through an optional voice loop with barge-in. The procedural 3D
+chef avatar **Kef** is the status display, so there are no spinners to
 stare at while cooking.
 
 The product is **Cook Mode**. Recipe intake (voice or typed/pasted text) is just
 the on-ramp into a guided, eyes-up, hands-free cook.
+
+## Kef sleep and voice controls
+
+Kef starts asleep on every reload, keeping your recipe and timers. Tap Kef (or
+activate it with the keyboard) to wake and enable the microphone. Typing wakes
+Kef without enabling capture. After 60 seconds without speech or interaction,
+counted after playback finishes, Kef sleeps again.
+
+Voice wake is off by default. Enable it in Settings to listen for "Kef", "Hey
+Kef", "Hello Kef", or "Okay Kef" while asleep. Pronounce Kef as **Keef**,
+rhyming with leaf; transcripts may spell it Kef or Keef, including "OK Keef". Other speech stays out of the
+conversation; a trailing request is processed after waking. A saved opt-in can
+resume only with an already granted microphone permission. Manual mute stops
+all capture immediately and submits speech recorded before the click once, after a bounded
+200 ms worklet flush. Kef stays muted while answering. Unmute starts fresh; while
+asleep it enables wake-only listening for this session and does not wake Kef. Reset,
+disconnect, sleep and superseding input discard unfinished recordings.
+
+New input interrupts old playback and cancels the superseded reply. Reply IDs
+reject late audio, and decoder generations prevent stopped chunks restarting.
+Settings includes Ava, Andrew, Emma and Brian alongside the existing voices;
+the current Jenny default and saved selections remain available.
+
+## Guided cooking
+
+- If you do not know what to cook, GourMate asks up to four short questions about
+  cravings, dietary needs, available ingredients and time. You can answer by
+  voice, type freely, choose an option, or say “Suggest now.”
+- Dish options open a preview with a photograph, description, estimated time,
+  difficulty, ingredients, appeal and fit. “Choose this dish” selects it;
+  opening or dismissing the preview does not.
+- Normal replies include useful follow-up choices. Moving between cooking steps
+  requires “Continue” or a spoken confirmation. “Skip this step” and “Skip to
+  step N” bypass that check once. Finishing early warns about remaining steps.
+- Interview answers last for the current session and clear on start-over.
+  New users can choose “Use text instead” without granting microphone access.
+
+Choices appear beneath the latest assistant message in the conversation. The
+compact planner has ingredients, expandable steps, and a Start cooking button.
+On desktop, opening the planner expands the workspace while keeping chat width.
+
+Photos load directly from Wikimedia URLs. Gallery credits are recorded in
+`frontend/public/food/ATTRIBUTIONS.md`; other dishes use the backend's
+`POST /api/food-images/lookup` Commons search when their preview opens. Only the
+dish name is sent. Lookup has a five-second timeout and bounded metadata cache;
+missing, unrelated, unlicensed, or failed images show a placeholder. Photos are
+not bundled or precached, so image display requires an internet connection.
 
 ## Architecture
 
@@ -41,8 +88,13 @@ the on-ramp into a guided, eyes-up, hands-free cook.
 
 Silero VAD runs on the continuous stream server-side and drives both
 end-of-utterance detection and barge-in. The client owns the `Recipe` JSON; the
-LLM emits tool calls that the client executes. Pure navigation turns are
-answered from `Recipe` without spending a Gemini round-trip.
+LLM interprets each free-form voice or typed request in the existing conversational
+turn, using phase, recipe, recent history, preferences and pending confirmations.
+Validated tool calls then execute deterministically against the client-owned recipe.
+Planner buttons and action choices send typed `action_input` requests and need no
+Gemini interpretation. Positive feedback approves a plan and asks readiness; an
+explicit start begins step one. Repeated start requests acknowledge the active
+step and never advance it.
 
 The wire contract is machine-checked: the golden manifest
 [`contracts/ws-events.json`](contracts/ws-events.json) is mirrored by the Pydantic
@@ -133,7 +185,7 @@ The QA suites are committed and run offline (no model weights or API key needed)
 
 | Area | Command | Covers |
 | :--- | :--- | :--- |
-| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | 245 pytest tests: token bucket / session / daily limits, PCM ring buffer, silence trim + speech gate, utterance continuation, LocalAgreement streaming, sherpa-onnx partial engine, typed error taxonomy, recipe validation, tools + navigation, exact §7 serializers |
+| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | Offline pytest checks: token bucket / session / daily limits, PCM ring buffer, silence trim + speech gate, utterance continuation, LocalAgreement streaming, sherpa-onnx partial engine, typed error taxonomy, recipe validation, tools + navigation, exact §7 serializers |
 | Frontend tests | `cd frontend && npm test` | Vitest + jsdom: contract guard, store, timers, cookbook, copy |
 | Frontend types | `cd frontend && npm run typecheck` | `tsc --noEmit` over the WS contract |
 | Frontend build | `cd frontend && npm run build` | Type-check + production PWA bundle |

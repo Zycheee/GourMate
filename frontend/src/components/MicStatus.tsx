@@ -27,6 +27,7 @@ function useLiveMicLevel(): number {
 
 export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }) {
   const muted = useSession((s) => s.muted);
+  const wakeListening = useSession((s) => s.wakeListening);
   const connection = useSession((s) => s.connection);
   const voiceState = useSession((s) => s.voiceState);
   const level = useLiveMicLevel();
@@ -34,7 +35,9 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
   const offline = connection === "reconnecting" || connection === "closed" || connection === "idle";
   const label = offline
     ? UI.reconnecting
-    : muted
+    : wakeListening
+      ? "Wake listening"
+      : muted
       ? UI.micMuted
       : voiceState === "processing"
         ? UI.thinking
@@ -75,9 +78,9 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
       <motion.button
         type="button"
         onClick={onToggleMute}
-        aria-pressed={muted}
-        aria-label={muted ? UI.unmute : UI.mute}
-        title={muted ? UI.unmute : UI.mute}
+        aria-pressed={muted && !wakeListening}
+        aria-label={wakeListening ? "Stop wake listening" : muted ? UI.unmute : UI.mute}
+        title={wakeListening ? "Stop wake listening" : muted ? UI.unmute : UI.mute}
         {...pressProps}
         className={[
           "flex h-8.5 w-8.5 sm:h-9 sm:w-9 items-center justify-center rounded-full clay-control transition-colors duration-micro ease-ui clay-soft",
@@ -87,7 +90,7 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
             : "bg-surface dark:bg-surface-2 text-ink hover:bg-surface"
         ].join(" ")}
       >
-        {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        {muted && !wakeListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
       </motion.button>
     </div>
   );
