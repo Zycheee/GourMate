@@ -2,15 +2,12 @@
  * StepProgressRing — a subtle DOM SVG progress ring centered on the avatar in
  * Cook Mode: the arc shows `(currentStepIndex + 1) / total` and a small
  * "Step N of M" label sits under the model. Decorative overlay
- * (`pointer-events-none`); the dash offset springs so step changes glide, and
- * the whole ring translates by the shared avatar offset (`lib/avatarOffset`)
- * so it follows the model exactly when the floating cards open or close.
+ * `pointer-events-none`); the dash offset springs so step changes glide.
  * Hidden outside cooking.
  */
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "../store/session";
-import { useAvatarOffsetPx } from "../lib/avatarOffset";
 import { modelSpring } from "../lib/motion";
 import { UI } from "../lib/copy";
 
@@ -22,7 +19,6 @@ export default function StepProgressRing() {
   const phase = useSession((s) => s.phase);
   const recipe = useSession((s) => s.recipe);
   const currentStepIndex = useSession((s) => s.currentStepIndex);
-  const offsetX = useAvatarOffsetPx();
 
   const total = recipe?.steps.length ?? 0;
   const visible = phase === "cooking" && total > 0;
@@ -39,15 +35,10 @@ export default function StepProgressRing() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
         >
-          <motion.div
-            className="relative"
-            initial={{ x: offsetX }}
-            animate={{ x: offsetX }}
-            transition={modelSpring}
-          >
+          <div className="relative">
             <svg
               viewBox={`0 0 ${VIEW} ${VIEW}`}
-              className="h-[min(64vmin,520px)] w-[min(64vmin,520px)] -rotate-90"
+              className="assistant-progress-ring -rotate-90"
               aria-hidden="true"
             >
               <circle
@@ -72,10 +63,10 @@ export default function StepProgressRing() {
                 transition={modelSpring}
               />
             </svg>
-            <p className="absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap font-mono text-12 uppercase tracking-[0.16em] text-ink-muted">
+            <p className="absolute left-1/2 top-full mt-6 -translate-x-1/2 whitespace-nowrap font-mono text-10 uppercase tracking-[0.16em] text-ink-muted">
               {UI.stepOf(currentStepIndex + 1, total)}
             </p>
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

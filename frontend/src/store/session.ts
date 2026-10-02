@@ -20,13 +20,24 @@ import type {
   Toast,
   VoiceState
 } from "../types";
-import { loadTimers, recomputeTimers, saveTimers } from "../lib/timers";
+import { clearTimers, loadTimers, recomputeTimers, saveTimers } from "../lib/timers";
+import { clearCookbook } from "../lib/cookbook";
+import { clearChecklist } from "../lib/checklist";
+
+export const DEFAULT_PANEL_LAYOUT = {
+  chatWidth: 1,
+  plannerWidth: 1,
+  chatSide: "left" as const,
+  plannerSide: "right" as const,
+  sameSideOrder: "chat-first" as const
+};
 
 const DEFAULT_SETTINGS: Settings = {
   voice: "en-US-JennyNeural",
   micDeviceId: null,
   timerSound: true,
-  theme: "auto"
+  theme: "auto",
+  ...DEFAULT_PANEL_LAYOUT
 };
 
 function uid(): string {
@@ -105,6 +116,7 @@ export interface SessionStore {
   /** Reconcile persisted timers with `ends_at` after load/refresh. */
   hydrateTimers: () => KitchenTimer[];
   resetSession: () => void;
+  clearCookbookData: () => void;
 }
 
 export const useSession = create<SessionStore>()(
@@ -252,7 +264,32 @@ export const useSession = create<SessionStore>()(
           soundPrompt: false,
           choices: null,
           voiceState: "idle"
-        })
+        }),
+
+      clearCookbookData: () => {
+        clearCookbook();
+        clearChecklist();
+        clearTimers();
+        set({
+          phase: "intake",
+          recipe: null,
+          currentStepIndex: 0,
+          timers: [],
+          transcript: [],
+          liveCaption: "",
+          userTranscript: "",
+          userSpeaking: false,
+          triage: null,
+          toast: null,
+          soundPrompt: false,
+          pulsedTimerIds: [],
+          choices: null,
+          voiceState: "idle",
+          focusMode: false,
+          chatOpen: true,
+          infoOpen: true
+        });
+      }
     }),
     {
       name: "gourmate-session-v1",
@@ -275,7 +312,13 @@ export const useSession = create<SessionStore>()(
           timers: p.timers ?? currentState.timers,
           transcript: p.transcript ?? currentState.transcript,
           muted: p.muted ?? currentState.muted,
-          settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) },
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...(p.settings ?? {}),
+            chatSide: p.settings?.chatSide === "right" ? "right" : DEFAULT_SETTINGS.chatSide,
+            plannerSide: p.settings?.plannerSide === "left" ? "left" : DEFAULT_SETTINGS.plannerSide,
+            sameSideOrder: p.settings?.sameSideOrder === "planner-first" ? "planner-first" : "chat-first"
+          },
           onboarded: p.onboarded ?? currentState.onboarded,
 
           voiceState: currentState.voiceState,
@@ -321,7 +364,8 @@ export const useSession = create<SessionStore>()(
           setOnboarded: currentState.setOnboarded,
           sessionSnapshot: currentState.sessionSnapshot,
           hydrateTimers: currentState.hydrateTimers,
-          resetSession: currentState.resetSession
+          resetSession: currentState.resetSession,
+          clearCookbookData: currentState.clearCookbookData
         };
       }
     }

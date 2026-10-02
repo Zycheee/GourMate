@@ -21,7 +21,7 @@ export interface SessionSocketHandlers {
 }
 
 function socketUrl(): string {
-  const base = (import.meta.env.VITE_WS_URL ?? "ws://localhost:8080").replace(/\/+$/, "");
+  const base = (import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8080").replace(/\/+$/, "");
   return `${base}${WS_PATH}`;
 }
 
@@ -30,7 +30,7 @@ function socketUrl(): string {
  * any trailing `/ws/session` stripped (e.g. `ws://host:8080` → `http://host:8080`).
  */
 export function httpBaseUrl(): string {
-  const base = (import.meta.env.VITE_WS_URL ?? "ws://localhost:8080")
+  const base = (import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8080")
     .replace(/\/+$/, "")
     .replace(/\/ws\/session$/, "");
   return base.replace(/^ws/, "http");

@@ -13,9 +13,9 @@
  * intake on mobile (there is no plan or step content yet).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Volume2 } from "lucide-react";
 import IngredientsPanel from "./IngredientsPanel";
 import PlanCard from "./PlanCard";
 import StepCard from "./StepCard";
@@ -33,36 +33,10 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
   /* Shared panel state (the avatar glides around open cards). */
   const infoOpen = useSession((s) => s.infoOpen);
   const setInfoOpen = useSession((s) => s.setInfoOpen);
+  const setChatOpen = useSession((s) => s.setChatOpen);
 
-  /** Mobile: sheet handle ↔ expanded sheet. */
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const prevOpenRef = useRef(infoOpen);
-
-  /* Desktop minimize swaps column ↔ pill through AnimatePresence (`mode="wait"`),
-     so the successor control mounts after the exit — focus follows it via a
-     callback ref once the toggle's intent lands on it. */
-  const focusIntent = useRef<"expand" | "minimize" | null>(null);
-  const bindExpand = useCallback((el: HTMLButtonElement | null) => {
-    if (el && focusIntent.current === "expand") {
-      focusIntent.current = null;
-      el.focus();
-    }
-  }, []);
-  const bindMinimize = useCallback((el: HTMLButtonElement | null) => {
-    if (el && focusIntent.current === "minimize") {
-      focusIntent.current = null;
-      el.focus();
-    }
-  }, []);
-
-  /* Minimize/expand records where focus should land after the swap. */
-  useEffect(() => {
-    const was = prevOpenRef.current;
-    prevOpenRef.current = infoOpen;
-    if (was === infoOpen) return;
-    focusIntent.current = infoOpen ? "minimize" : "expand";
-  }, [infoOpen]);
+  const sheetOpen = !isDesktop && infoOpen;
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   /* Auto-open the Planner when the session enters planning/cooking — only on
      the transition, so a manual minimize during cooking is never overridden. */
@@ -96,16 +70,16 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
               type="button"
               onClick={() => onSendText(UI.plan.doneCookingText)}
               {...pressProps}
-              className="inline-flex min-h-[44px] items-center rounded-md bg-accent-strong px-4 py-3 text-14 font-medium text-white transition-colors duration-micro ease-ui hover:bg-accent-strong/90 active:bg-accent-strong/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex min-h-9 flex-1 items-center justify-center rounded-full bg-tallow px-3 py-2 text-11 font-semibold text-[#27352A] shadow-[0_4px_14px_rgba(224,112,42,0.2)] transition-colors duration-micro ease-ui hover:bg-tallow/90 active:bg-tallow/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              {UI.plan.doneCooking}
+              <><Check className="mr-1.5 h-3.5 w-3.5" />{UI.plan.doneCooking}</>
             </motion.button>
           )}
           <motion.button
             type="button"
             onClick={() => onSendText(cancelText)}
             {...pressProps}
-            className="inline-flex min-h-[44px] items-center rounded-md border border-white/10 bg-surface-2 px-4 py-3 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-9 flex-1 items-center justify-center rounded-full clay-btn px-3 py-2 text-11 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {cancelLabel}
           </motion.button>
@@ -114,7 +88,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
       {/* Completion card — the recipe is done; "Cook something else" sends the
           discontinue line and the server's `reset` returns to intake. */}
       {phase === "done" && (
-        <div className="w-full rounded-lg glass px-6 py-5 shadow-warm transition-colors duration-layout ease-ui sm:px-8 sm:py-6">
+        <div className="w-full rounded-2xl clay-card px-6 py-5 transition-colors duration-layout ease-ui sm:px-8 sm:py-6">
           <h2 className="font-display text-28 font-semibold leading-tight text-ink">
             {UI.done.title}
           </h2>
@@ -156,79 +130,41 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
    * off the card. `x`/`y` live in motion (not translate classes) so hover/tap
    * scaling cannot clobber the centering.
    */
-  const edgeHandle =
-    "absolute top-1/2 z-10 flex h-11 w-11 items-center justify-center rounded-full glass text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
-
   /* ------------------------------ desktop ------------------------------ */
 
   if (isDesktop) {
     return (
       <AnimatePresence initial={false} mode="wait">
-        {!infoOpen ? (
-          /* Round expand handle floating where the card was (near the right
-             edge) — icon-only, the free canvas stays full width. */
-          <motion.aside
-            key="info-pill"
-            id="info-panel"
-            aria-label={railLabel}
-            className="absolute right-4 top-1/2 z-20"
-            initial={{ opacity: 0, x: 16, scale: 0.85, y: "-50%" }}
-            animate={{ opacity: 1, x: 0, scale: 1, y: "-50%" }}
-            exit={{ opacity: 0, x: 12, scale: 0.85, y: "-50%" }}
-            transition={spring}
-          >
-            <motion.button
-              type="button"
-              ref={bindExpand}
-              onClick={() => setInfoOpen(true)}
-              aria-expanded={false}
-              aria-controls="info-panel"
-              aria-label={UI.panel.expand}
-              title={UI.panel.expand}
-              {...pressProps}
-              className="flex min-h-[44px] items-center gap-2 rounded-full glass px-4 text-14 font-medium text-ink-muted transition-colors duration-micro ease-ui hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <ChevronLeft className="h-5 w-5" />
-              {railLabel}
-            </motion.button>
-          </motion.aside>
-        ) : (
           <motion.aside
             key="info-panel"
             id="info-panel"
             aria-label={panelName}
-            className="absolute right-4 top-20 bottom-4 z-20 flex w-[360px] xl:w-[400px] flex-col rounded-2xl glass"
+            className="gourmate-planner-panel planner-panel relative z-20 order-2 flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[22px] clay-card lg:order-none"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 14 }}
             transition={spring}
           >
-            {/* Round minimize handle on the inner (left) edge — half on, half
-                off the card. */}
-            <motion.button
-              type="button"
-              ref={bindMinimize}
-              onClick={() => setInfoOpen(false)}
-              aria-expanded={true}
-              aria-controls="info-panel"
-              aria-label={UI.panel.collapse}
-              title={UI.panel.collapse}
-              {...pressProps}
-              style={{ x: "-50%", y: "-50%" }}
-              className={`${edgeHandle} left-0`}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </motion.button>
             {/* Header row — the Planner label (the brand echo carries the
                 recipe title). */}
-            <div className="flex items-center border-b border-white/10 px-5 py-3">
-              <h1 className="font-display text-20 font-semibold text-ink">{panelName}</h1>
+            <div className="flex items-center justify-between gap-2 border-b border-[rgba(224,112,42,0.1)] px-4 py-3">
+              <h1 className="font-display text-16 font-semibold text-ink">Planner</h1>
+              <span className="font-mono text-9 tabular-nums text-ink-muted">03:00 / 75:00</span>
             </div>
-            <div className="no-scrollbar flex-1 overflow-y-auto pb-4 pl-7 pr-5 pt-4">
+            <div ref={bodyRef} className="no-scrollbar flex-1 overflow-y-auto px-4 pb-4 pt-3">
               {body}
             </div>
+            <div className="flex shrink-0 items-center justify-between border-t border-[rgba(224,112,42,0.1)] px-4 py-3 font-mono text-9 text-ink-muted">
+              <span className="inline-flex items-center gap-1.5"><Volume2 className="h-3.5 w-3.5" />Voice narration on</span>
+              <button
+                type="button"
+                onClick={() => bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+                className="transition-colors hover:text-verdigris"
+              >
+                View overview
+              </button>
+            </div>
           </motion.aside>
-        )}
       </AnimatePresence>
     );
   }
@@ -240,11 +176,15 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
   return (
     <section
       aria-label={railLabel}
-      className="flex w-full flex-col rounded-t-lg glass"
+      className="planner-panel order-2 flex max-h-[35vh] w-full flex-col overflow-hidden rounded-[22px] clay-card lg:order-none"
     >
       <motion.button
         type="button"
-        onClick={() => setSheetOpen((v) => !v)}
+        onClick={() => {
+          const nextOpen = !infoOpen;
+          setInfoOpen(nextOpen);
+          if (nextOpen) setChatOpen(false);
+        }}
         aria-expanded={sheetOpen}
         {...(sheetOpen ? { "aria-controls": "info-sheet-body" } : {})}
         {...pressProps}
@@ -262,7 +202,7 @@ export default function InfoPanel({ onSendText }: { onSendText: (text: string) =
       {sheetOpen && (
         <div
           id="info-sheet-body"
-          className="no-scrollbar max-h-[35vh] overflow-y-auto px-4 pb-4 pt-1"
+          className="no-scrollbar max-h-[calc(35vh-48px)] overflow-y-auto px-4 pb-4 pt-1"
         >
           {body}
         </div>

@@ -43,3 +43,12 @@ export function toggleChecked(recipeId: string, ingredientId: string): string[] 
   writeAll(all);
   return next;
 }
+
+/** Remove all persisted ingredient check-offs with the cookbook. */
+export function clearChecklist(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+}

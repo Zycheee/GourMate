@@ -13,15 +13,15 @@ import { useEffect, useState } from "react";
 import { useSession } from "../store/session";
 import type { ThemePreference } from "../types";
 
-export const MODEL_COLOR = "#E0702A";
+export const MODEL_COLOR = "#E0702A"; // Deep warm orange — matches reference mascot body
 
 /** Concrete color scheme after `auto` resolution. */
 export type ResolvedTheme = "light" | "dark";
 
 /** Surface colors per resolved theme (keep in sync with `--bg` in index.css). */
 export const THEME_COLORS: Record<ResolvedTheme, string> = {
-  light: "#f7f3ec",
-  dark: "#141110"
+  light: "#F7F5EA",
+  dark: "#071C15"
 };
 
 /** Resolve a theme preference to a concrete scheme (`auto` follows the OS). */
@@ -130,8 +130,8 @@ function triple(t: [number, number, number]): string {
 export function deriveAccentPalette(base: string = MODEL_COLOR): AccentPalette {
   const [r, g, b] = parseHex(base);
   const [h, s, l] = rgbToHsl(r, g, b);
-  const soft = hslToRgb(h, Math.min(100, s * 0.82), Math.min(92, l + 20));
-  const strong = hslToRgb(h, Math.min(100, s * 1.05), Math.max(10, l - 14));
+  const soft = hslToRgb(h, Math.min(100, s * 0.75), Math.min(92, l + 22));
+  const strong = hslToRgb(h, Math.min(100, s * 1.08), Math.max(10, l - 16));
   return {
     accent: toHex(r, g, b),
     accentRgb: triple([r, g, b]),

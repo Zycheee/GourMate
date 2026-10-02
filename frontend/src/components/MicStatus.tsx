@@ -3,7 +3,7 @@
  * mic status + mute. Space toggles mute globally (handled in App).
  */
 
-import { Mic, MicOff, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useSession } from "../store/session";
 import { getMicLevel } from "../lib/audio";
@@ -53,8 +53,8 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
           : "bg-tallow";
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-2.5 rounded-full glass px-4 py-2.5">
+    <div className="flex items-center gap-2">
+      <div className="flex h-11 items-center gap-2.5 rounded-full clay-inset px-4">
         <span className="relative flex h-3 w-3 items-center justify-center" aria-hidden="true">
           {!muted && !offline && level > 0.02 && (
             <span
@@ -64,12 +64,12 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
           )}
           <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dotColor}`} />
         </span>
-        <span className="text-14 font-medium text-ink">{label}</span>
-        {offline ? (
-          <WifiOff className="h-3.5 w-3.5 text-steel" aria-hidden="true" />
-        ) : (
-          <Wifi className="h-3.5 w-3.5 text-steel" aria-hidden="true" />
-        )}
+        <span className="text-12 font-medium text-ink">{label}</span>
+        <span className={`voice-wave ${muted || offline ? "is-muted" : ""}`} aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((barIndex) => (
+            <span key={barIndex} style={{ animationDelay: `${barIndex * 90}ms` }} />
+          ))}
+        </span>
       </div>
 
       <motion.button
@@ -80,14 +80,14 @@ export default function MicStatus({ onToggleMute }: { onToggleMute: () => void }
         title={muted ? UI.unmute : UI.mute}
         {...pressProps}
         className={[
-          "flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-micro ease-ui",
+          "flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-micro ease-ui",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           muted
             ? "bg-steel/25 text-ink hover:bg-steel/35"
             : "bg-surface/85 text-ink hover:bg-surface-2/90"
         ].join(" ")}
       >
-        {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
       </motion.button>
     </div>
   );

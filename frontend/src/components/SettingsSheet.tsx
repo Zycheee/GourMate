@@ -8,12 +8,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Play, Trash2, X } from "lucide-react";
-import { useSession } from "../store/session";
+import { DEFAULT_PANEL_LAYOUT, useSession } from "../store/session";
+import { swapPanelLayout } from "../lib/layout";
 import { previewVoice } from "../lib/api";
-import { clearCookbook } from "../lib/cookbook";
 import { pressProps, spring } from "../lib/motion";
 import { UI, VOICES } from "../lib/copy";
-import type { ThemePreference } from "../types";
+import type { PanelSide, ThemePreference } from "../types";
 
 interface MicDevice {
   deviceId: string;
@@ -94,12 +94,86 @@ function Switch({
   );
 }
 
+function LayoutSlider({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step,
+  valueLabel,
+  onChange
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  valueLabel: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={id} className="text-14 text-ink">{label}</label>
+        <output htmlFor={id} className="font-mono text-12 tabular-nums text-ink-muted">{valueLabel}</output>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="layout-range h-8 w-full cursor-pointer"
+      />
+    </div>
+  );
+}
+
+function PanelSidePicker({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: PanelSide;
+  onChange: (side: PanelSide) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-14 text-ink">{label}</span>
+      <div role="group" aria-label={label} className="flex rounded-full bg-surface-2 p-1">
+        {(["left", "right"] as const).map((side) => (
+          <motion.button
+            key={side}
+            type="button"
+            aria-pressed={value === side}
+            onClick={() => onChange(side)}
+            {...pressProps}
+            className={[
+              "min-h-8 min-w-16 rounded-full px-3 text-11 font-semibold uppercase transition-colors duration-micro ease-ui",
+              value === side ? "bg-verdigris text-white shadow-sm" : "text-ink-muted hover:text-ink"
+            ].join(" ")}
+          >
+            {side}
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSession((s) => s.settings);
   const setSettings = useSession((s) => s.setSettings);
   const connection = useSession((s) => s.connection);
+  const clearCookbookData = useSession((s) => s.clearCookbookData);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const [layoutMode, setLayoutMode] = useState(false);
   const [previewPending, setPreviewPending] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
 
@@ -156,7 +230,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   };
 
   const confirmClearCookbook = (): void => {
-    clearCookbook();
+    clearCookbookData();
     setConfirming(false);
   };
 
@@ -191,7 +265,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
         transition={spring}
         className={[
           "absolute inset-x-0 bottom-0 mx-auto flex max-h-[92vh] w-full max-w-lg flex-col",
-          "rounded-t-lg glass-strong shadow-warm-lg"
+          "rounded-t-2xl clay-card"
         ].join(" ")}
       >
         <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
@@ -295,6 +369,69 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
                 ))}
               </div>
             </div>
+          </Section>
+
+          {/* ---------------- Layout ---------------- */}
+          <Section title="Layout">
+            <motion.button
+              type="button"
+              aria-expanded={layoutMode}
+              onClick={() => setLayoutMode((current) => !current)}
+              {...pressProps}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full clay-btn px-4 text-14 font-medium text-ink transition-colors duration-micro ease-ui hover:text-verdigris focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Customize Layout
+            </motion.button>
+            {layoutMode && (
+              <div className="flex flex-col gap-3 rounded-xl bg-surface-2/55 p-3">
+                <PanelSidePicker
+                  label="Chat position"
+                  value={settings.chatSide}
+                  onChange={(chatSide) => setSettings({ chatSide })}
+                />
+                <LayoutSlider
+                  id="chat-panel-width"
+                  label="Chat panel width"
+                  value={settings.chatWidth}
+                  min={0.7}
+                  max={1.25}
+                  step={0.05}
+                  valueLabel={`${Math.round(settings.chatWidth * 100)}%`}
+                  onChange={(chatWidth) => setSettings({ chatWidth })}
+                />
+                <PanelSidePicker
+                  label="Planner position"
+                  value={settings.plannerSide}
+                  onChange={(plannerSide) => setSettings({ plannerSide })}
+                />
+                <LayoutSlider
+                  id="planner-panel-width"
+                  label="Planner panel width"
+                  value={settings.plannerWidth}
+                  min={0.7}
+                  max={1.25}
+                  step={0.05}
+                  valueLabel={`${Math.round(settings.plannerWidth * 100)}%`}
+                  onChange={(plannerWidth) => setSettings({ plannerWidth })}
+                />
+                <motion.button
+                  type="button"
+                  onClick={() => setSettings(swapPanelLayout(settings))}
+                  {...pressProps}
+                  className="self-start rounded-full border border-verdigris/25 px-4 py-2 text-12 font-medium text-verdigris transition-colors duration-micro ease-ui hover:bg-verdigris/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Swap Chat &amp; Planner
+                </motion.button>
+                <motion.button
+                  type="button"
+                  onClick={() => setSettings(DEFAULT_PANEL_LAYOUT)}
+                  {...pressProps}
+                  className="self-start rounded-full border border-verdigris/25 px-4 py-2 text-12 font-medium text-verdigris transition-colors duration-micro ease-ui hover:bg-verdigris/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Reset Layout
+                </motion.button>
+              </div>
+            )}
           </Section>
 
           {/* ---------------- Data ---------------- */}

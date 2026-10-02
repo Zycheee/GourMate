@@ -17,7 +17,6 @@ import * as THREE from "three";
 import { useSession } from "../store/session";
 import { getMicLevel, getMicPeak, getMouthLevel } from "../lib/audio";
 import { MODEL_COLOR, THEME_COLORS, useResolvedTheme } from "../lib/theme";
-import { useAvatarOffsetPx } from "../lib/avatarOffset";
 import type { VoiceState } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -201,7 +200,6 @@ function useAvatarPlacement(receded: boolean) {
   const size = useThree((s) => s.size);
   const chatOpen = useSession((s) => s.chatOpen);
   const infoOpen = useSession((s) => s.infoOpen);
-  const offsetPx = useAvatarOffsetPx();
   const portrait = size.height > size.width;
   const aspect = size.width / size.height;
   const viewH = 2 * 4.6 * Math.tan((32 * Math.PI) / 180 / 2);
@@ -209,15 +207,10 @@ function useAvatarPlacement(receded: boolean) {
 
   const target = useMemo(() => {
     if (!receded) {
-      // Glide so the model centres in the free space the open cards leave;
-      // the helper owns the pixel maths, converted here to world units at the
-      // avatar plane (viewW world units span size.width pixels).
-      const x = offsetPx * (viewW / Math.max(1, size.width));
       const squeeze = size.width >= 1024 && chatOpen && infoOpen ? 0.94 : 1;
       return {
-        // Dead-center vertically — the model sits in the middle of the free
-        // space (the glide is horizontal only).
-        pos: [x, 0, 0] as [number, number, number],
+        // The workspace reserves a dedicated center column for the model.
+        pos: [0, 0, 0] as [number, number, number],
         scale: squeeze
       };
     }
@@ -231,7 +224,7 @@ function useAvatarPlacement(receded: boolean) {
       pos: [viewW * 0.34, -viewH * 0.36, -0.55] as [number, number, number],
       scale: 0.44
     };
-  }, [receded, portrait, viewW, size.width, offsetPx, chatOpen, infoOpen]);
+  }, [receded, portrait, viewW, size.width, chatOpen, infoOpen]);
 
   return { target, portrait, viewW, viewH };
 }
@@ -247,7 +240,7 @@ const HAT = new THREE.Color("#F7F3EC");
 const EMBER = new THREE.Color("#E4572E");
 const RIM = new THREE.Color("#9BA8B0");
 const BLUSH = new THREE.Color("#E0906F");
-const VERDIGRIS = new THREE.Color("#5FA88A");
+const VERDIGRIS = new THREE.Color("#E0702A");
 /** Fixed body color — deep, saturated warm orange (independent of theme). */
 const BODY_ORANGE = MODEL_COLOR;
 /** Permanent "jaunty" sideways lean of the toque (~9° toward the character's left). */

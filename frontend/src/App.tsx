@@ -9,9 +9,9 @@
  * the sound prompt float top-right beneath them.
  */
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { ChefHat, Maximize2, Minimize2, Power, Settings2, Volume2, X } from "lucide-react";
+import { ChefHat, ChevronLeft, ChevronRight, Maximize2, Minimize2, Power, Settings2, Volume2, X } from "lucide-react";
 import ChatPanel from "./components/ChatPanel";
 import Confetti from "./components/Confetti";
 import ErrorToast from "./components/ErrorToast";
@@ -24,11 +24,10 @@ import StepProgressRing from "./components/StepProgressRing";
 import TriageBanner from "./components/TriageBanner";
 import { useVoiceSession } from "./hooks/useVoiceSession";
 import { useSession } from "./store/session";
-import { useMediaQuery } from "./lib/useMediaQuery";
 import { UI } from "./lib/copy";
-import { pressProps, spring, modelSpring } from "./lib/motion";
+import { useMediaQuery } from "./lib/useMediaQuery";
+import { pressProps, spring } from "./lib/motion";
 import { applyAccentTheme, resolveTheme } from "./lib/theme";
-import { useAvatarOffsetPx } from "./lib/avatarOffset";
 import { isAudioUnlocked, resumeAudioContext } from "./lib/audio";
 
 // The 3D avatar (three + @react-three + @react-spring) is the heaviest part of
@@ -53,7 +52,7 @@ function AvatarFallback() {
         <div className="mx-auto h-6 w-20 rounded-full bg-[#F7F3EC] shadow-warm" />
         <div className="mx-auto -mt-2 h-4 w-14 rounded-sm bg-[#F7F3EC]" />
         {/* squircle body */}
-        <div className="relative mt-1 h-28 w-28 rounded-[34px] bg-[rgb(var(--tallow-rgb))] shadow-warm-lg">
+        <div className="relative mt-1 h-28 w-28 rounded-[34px] bg-[#E0702A] shadow-warm-lg">
           {/* pill eyes */}
           <span className="absolute left-[34px] top-10 h-5 w-3 rounded-full bg-[#241F1B]" />
           <span className="absolute right-[34px] top-10 h-5 w-3 rounded-full bg-[#241F1B]" />
@@ -189,18 +188,30 @@ export default function App() {
   const setSoundPrompt = useSession((s) => s.setSoundPrompt);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   const { start, sendText, toggleMute, setVoice, restartMic, disconnect, interrupt } = useVoiceSession();
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const audioUnlocked = useAudioUnlock();
-  const offsetX = useAvatarOffsetPx();
   const focusMode = useSession((s) => s.focusMode);
   const setFocusMode = useSession((s) => s.setFocusMode);
   const setChatOpen = useSession((s) => s.setChatOpen);
   const setInfoOpen = useSession((s) => s.setInfoOpen);
+  const voiceState = useSession((s) => s.voiceState);
+  const chatOpen = useSession((s) => s.chatOpen);
+  const infoOpen = useSession((s) => s.infoOpen);
+  const chatWidth = useSession((s) => s.settings.chatWidth);
+  const plannerWidth = useSession((s) => s.settings.plannerWidth);
+  const chatSide = useSession((s) => s.settings.chatSide);
+  const plannerSide = useSession((s) => s.settings.plannerSide);
+  const sameSideOrder = useSession((s) => s.settings.sameSideOrder);
   useApplyTheme();
   useAccentTheme();
   useGlobalShortcuts(toggleMute, interrupt, sendText, settingsOpen || !onboarded);
+
+  useLayoutEffect(() => {
+    setChatOpen(isDesktop);
+    setInfoOpen(isDesktop);
+  }, [isDesktop, setChatOpen, setInfoOpen]);
 
   // Session boots after onboarding (mic gesture already granted).
   useEffect(() => {
@@ -256,9 +267,9 @@ export default function App() {
   const toggleFocus = useCallback(() => {
     const next = !useSession.getState().focusMode;
     setFocusMode(next);
-    setChatOpen(!next);
-    setInfoOpen(!next);
-  }, [setFocusMode, setChatOpen, setInfoOpen]);
+    setChatOpen(isDesktop && !next);
+    setInfoOpen(isDesktop && !next);
+  }, [isDesktop, setFocusMode, setChatOpen, setInfoOpen]);
 
   // Full teardown only on unmount (PWA keeps the page alive).
   useEffect(() => {
@@ -278,13 +289,51 @@ export default function App() {
       {/* Only the mic status stays over the canvas: plan/step panels live in
           the floating info card and notifications float top-right, so nothing
           covers the avatar. */}
-      <main className="pointer-events-none absolute inset-0 flex flex-col justify-end items-center gap-5 px-4 pb-48 pt-4 sm:px-8 lg:pb-8">
-        {/* Mic bar glides with the model so it always sits under it. */}
+      <main className="pointer-events-none absolute inset-0 flex flex-col items-center justify-end gap-4 px-3 pb-5 pt-20 sm:px-6">
+        <div className="pointer-events-auto absolute left-4 right-4 top-5 z-20 flex items-center justify-between">
+          <button
+            type="button"
+            aria-label={chatOpen ? "Close chat panel" : "Open chat panel"}
+            title={chatOpen ? "Close chat panel" : "Open chat panel"}
+            onClick={() => {
+              const nextOpen = !chatOpen;
+              setChatOpen(nextOpen);
+              if (nextOpen && !isDesktop) setInfoOpen(false);
+            }}
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full clay-btn text-ink-muted"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <motion.div
+            className="clay-btn inline-flex items-center gap-2 rounded-full px-4 py-2 text-10 font-semibold uppercase tracking-[0.12em] text-ink"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...spring, delay: 0.3 }}
+          >
+            <span className={`h-2 w-2 rounded-full ${voiceState === "listening" ? "bg-accent animate-pulse" : "bg-tallow"}`} />
+            Assistant active
+          </motion.div>
+          <button
+            type="button"
+            aria-label={infoOpen ? "Close planner panel" : "Open planner panel"}
+            title={infoOpen ? "Close planner panel" : "Open planner panel"}
+            onClick={() => {
+              const nextOpen = !infoOpen;
+              setInfoOpen(nextOpen);
+              if (nextOpen && !isDesktop) setChatOpen(false);
+            }}
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full clay-btn text-ink-muted"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Mic bar stays centered beneath the unchanged 3D mascot. */}
         <motion.div
           className="pointer-events-auto flex flex-col items-center gap-3"
-          initial={{ x: offsetX }}
-          animate={{ x: offsetX }}
-          transition={modelSpring}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={spring}
         >
           <MicStatus onToggleMute={toggleMute} />
         </motion.div>
@@ -300,39 +349,64 @@ export default function App() {
     </div>
   );
 
+  const assistantStage = (
+    <section className="gourmate-stage relative min-h-[300px] min-w-0 overflow-hidden rounded-[24px]" aria-label="Cooking assistant">
+      {avatarLayer}
+    </section>
+  );
+  const desktopChat = chatOpen ? <ChatPanel onSendText={sendText} /> : null;
+  const desktopPlanner = infoOpen ? <InfoPanel onSendText={sendText} /> : null;
+
+  const renderDesktopWorkspace = () => {
+    if (desktopChat && desktopPlanner && chatSide === plannerSide) {
+      const sideStack = (
+        <div key={`panels-${chatSide}`} className="gourmate-panel-stack min-w-0 min-h-0">
+          {sameSideOrder === "chat-first" ? <>{desktopChat}{desktopPlanner}</> : <>{desktopPlanner}{desktopChat}</>}
+        </div>
+      );
+      return chatSide === "left" ? <>{sideStack}{assistantStage}</> : <>{assistantStage}{sideStack}</>;
+    }
+
+    if (desktopChat && desktopPlanner) {
+      return chatSide === "left"
+        ? <>{desktopChat}{assistantStage}{desktopPlanner}</>
+        : <>{desktopPlanner}{assistantStage}{desktopChat}</>;
+    }
+
+    if (desktopChat) {
+      return chatSide === "left" ? <>{desktopChat}{assistantStage}</> : <>{assistantStage}{desktopChat}</>;
+    }
+
+    if (desktopPlanner) {
+      return plannerSide === "left" ? <>{desktopPlanner}{assistantStage}</> : <>{assistantStage}{desktopPlanner}</>;
+    }
+
+    return assistantStage;
+  };
+
   return (
     <MotionConfig reducedMotion="user">
-    <div className="relative h-[100dvh] overflow-hidden bg-bg text-ink">
-      {/* Frosted accent orbs — behind the full-bleed canvas. */}
+    <div className="gourmate-viewport relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-bg p-3 text-ink sm:p-4">
       <GlassBackdrop />
-
-      {/* Full-screen 3D canvas layer — the model glides around open cards. */}
-      {avatarLayer}
-
-      {/* Brand — top-left; pointer-transparent so it never blocks controls. */}
-      <motion.div
-        className="pointer-events-none absolute left-4 top-4 z-40 flex items-center gap-2"
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring, delay: 0.15 }}
-      >
-        <ChefHat className="h-5 w-5 text-accent" aria-hidden="true" />
-        <span className="shrink-0 font-display text-20 font-semibold text-ink">{UI.appName}</span>
-        {recipe && (
-          <>
-            <span aria-hidden="true" className="text-ink-muted">
-              ·
+      <div className="gourmate-shell relative z-10 flex h-[96dvh] min-h-[min(560px,96dvh)] w-[97vw] max-w-[1680px] flex-col overflow-hidden rounded-[26px] border border-[color:var(--header-border)] bg-[color:var(--header-bg)] p-3 shadow-[0_24px_90px_rgba(18,47,34,0.15)] sm:p-4">
+        <header className="gourmate-header relative z-40 flex h-[60px] shrink-0 items-center justify-between rounded-full border border-[color:var(--header-border)] bg-[color:var(--header-bg)] px-3 shadow-[var(--header-shadow)] sm:px-4">
+          <motion.div
+            className="flex min-w-0 items-center gap-2.5"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...spring, delay: 0.15 }}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#FFD275] to-[#E98235] text-[#27352A] shadow-[0_3px_10px_rgba(224,112,42,0.25)]">
+              <ChefHat className="h-5 w-5" aria-hidden="true" />
             </span>
-            {/* Optional recipe echo — truncates, the brand itself never does. */}
-            <span className="hidden max-w-[22ch] truncate text-16 text-ink-muted lg:block">
-              {recipe.title}
+            <span className="shrink-0 font-display text-18 font-bold text-ink">{UI.appName}</span>
+            <span aria-hidden="true" className="text-ink-muted">·</span>
+            <span className="max-w-[45vw] truncate text-12 font-medium text-verdigris sm:max-w-[34ch]">
+              {recipe?.title ?? "Healthy Beef Kaldereta"}
             </span>
-          </>
-        )}
-      </motion.div>
+          </motion.div>
 
-        {/* Floating controls (top-right) — the old full-width header is gone. */}
-        <div className="pointer-events-auto absolute top-4 right-4 z-40 flex items-center gap-1.5 rounded-full glass p-1.5">
+          <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
         {phase === "cooking" && (
           <motion.button
             type="button"
@@ -340,7 +414,7 @@ export default function App() {
             aria-label={UI.endSession}
             title={UI.endSession}
             {...pressProps}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2/60 text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <Power className="h-5 w-5" />
           </motion.button>
@@ -353,7 +427,7 @@ export default function App() {
             aria-label={focusMode ? UI.exitFocusMode : UI.focusMode}
             title={focusMode ? UI.exitFocusMode : UI.focusMode}
             {...pressProps}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2/60 text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {focusMode ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
           </motion.button>
@@ -364,15 +438,16 @@ export default function App() {
           aria-label={UI.settings}
           title={UI.settings}
           {...pressProps}
-          className="flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2/60 text-ink-muted transition-colors duration-micro ease-ui hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Settings2 className="h-5 w-5" />
         </motion.button>
-      </div>
+          </div>
+        </header>
 
       {/* Top-center column — triage first, then notifications (sound prompt +
           toasts) so both stay readable and never cover the floating controls. */}
-      <div className="pointer-events-auto absolute left-1/2 top-20 z-30 flex w-[min(92vw,36rem)] -translate-x-1/2 flex-col gap-3">
+      <div className="pointer-events-auto absolute left-1/2 top-[84px] z-30 flex w-[min(92vw,36rem)] -translate-x-1/2 flex-col gap-3">
         <TriageBanner />
 
         {/* Autoplay guard: queued assistant audio with a suspended context */}
@@ -411,25 +486,53 @@ export default function App() {
         <ErrorToast onRetry={() => void start()} />
       </div>
 
-      {/* Floating panel cards (desktop) / bottom stack (mobile). */}
-      {isDesktop ? (
-        <>
-          <ChatPanel onSendText={sendText} />
-          <InfoPanel onSendText={sendText} />
-        </>
-      ) : (
-        /* Mobile: full-bleed canvas + one bottom stack
-           [ info sheet | chat drawer ] anchored to the viewport. */
-        <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col">
-          <InfoPanel onSendText={sendText} />
-          <ChatPanel onSendText={sendText} />
-        </div>
-      )}
+      <div
+        style={{
+          "--chat-width": `${chatWidth * 1.0357}fr`,
+          "--planner-width": `${plannerWidth}fr`,
+          "--left-width": `${chatSide === "left" ? chatWidth * 1.0357 : plannerWidth}fr`,
+          "--right-width": `${chatSide === "right" ? chatWidth * 1.0357 : plannerWidth}fr`,
+          "--center-chat-width": `${chatWidth * 1.0357 * (71 / 29)}fr`,
+          "--center-planner-width": `${plannerWidth * (72 / 28)}fr`,
+          "--center-both-width": `${(chatWidth + plannerWidth) * (43 / 57)}fr`,
+          "--same-side-width": `${chatWidth * 1.0357 + plannerWidth}fr`,
+          "--same-side-center-width": `${(chatWidth * 1.0357 + plannerWidth) * (43 / 57)}fr`
+        } as CSSProperties}
+        className={[
+          "gourmate-workspace relative z-10 grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto_auto] gap-3 pt-3 transition-[grid-template-columns] duration-300 ease-in-out lg:grid-rows-1",
+          isDesktop && chatOpen && infoOpen && chatSide !== plannerSide
+            ? "lg:grid-cols-[minmax(250px,var(--left-width))_minmax(340px,var(--center-both-width))_minmax(250px,var(--right-width))]"
+            : isDesktop && chatOpen && infoOpen
+              ? chatSide === "left"
+                ? "lg:grid-cols-[minmax(460px,var(--same-side-width))_minmax(340px,var(--same-side-center-width))]"
+                : "lg:grid-cols-[minmax(340px,var(--same-side-center-width))_minmax(460px,var(--same-side-width))]"
+              : isDesktop && chatOpen
+                ? chatSide === "left"
+                  ? "lg:grid-cols-[minmax(260px,var(--chat-width))_minmax(340px,var(--center-chat-width))]"
+                  : "lg:grid-cols-[minmax(340px,var(--center-chat-width))_minmax(260px,var(--chat-width))]"
+                : isDesktop && infoOpen
+                  ? plannerSide === "left"
+                    ? "lg:grid-cols-[minmax(260px,var(--planner-width))_minmax(340px,var(--center-planner-width))]"
+                    : "lg:grid-cols-[minmax(340px,var(--center-planner-width))_minmax(260px,var(--planner-width))]"
+                  : isDesktop
+                    ? "lg:grid-cols-1"
+                    : ""
+        ].join(" ")}
+      >
+        {isDesktop ? renderDesktopWorkspace() : (
+          <>
+            {assistantStage}
+            <InfoPanel onSendText={sendText} />
+            <ChatPanel onSendText={sendText} />
+          </>
+        )}
+      </div>
 
       {/* Dialogs stay viewport-fixed overlays. */}
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {!onboarded && <Onboarding onAllowMic={handleAllowMic} onStart={handleStart} />}
+      </div>
     </div>
     </MotionConfig>
   );

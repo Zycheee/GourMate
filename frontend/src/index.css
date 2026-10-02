@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------ */
-/* Design tokens — design §2                                           */
+/* Design tokens — Claymorphism (Lifewood Brand)                      */
 /* ------------------------------------------------------------------ */
 
 :root {
@@ -28,6 +28,7 @@
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 24px;
+  --radius-clay: 28px;
   --radius-full: 9999px;
 
   /* Motion tokens */
@@ -38,43 +39,43 @@
   --ease-ui: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Light — "daylight kitchen" (default) */
+/* Light — "daylight kitchen" (default) — matches reference screenshot */
 :root {
-  --bg: #f7f3ec;
-  --surface: #ffffff;
-  --surface-2: #efe9df;
-  --text: #1b1714;
-  --text-muted: #6b6259;
-  --tallow: #c8821a;
-  --verdigris: #3e7a5e;
+  --bg: #F5EEDB;
+  --surface: #F9F7F7;
+  --surface-2: #F1EAE0;
+  --text: #133020;
+  --text-muted: #4a6b5a;
+  --tallow: #FFB84D;
+  --verdigris: #046241;
   --ember: #c63d1e;
   --steel: #6b7377;
 
-  --bg-rgb: 247 243 236;
-  --surface-rgb: 255 255 255;
-  --surface-2-rgb: 239 233 223;
-  --ink-rgb: 27 23 20;
-  --ink-muted-rgb: 107 98 89;
-  --tallow-rgb: 200 130 26;
-  --verdigris-rgb: 62 122 94;
+  --bg-rgb: 245 238 219;
+  --surface-rgb: 249 247 247;
+  --surface-2-rgb: 241 234 224;
+  --ink-rgb: 19 48 32;
+  --ink-muted-rgb: 74 107 90;
+  --tallow-rgb: 255 184 77;
+  --verdigris-rgb: 4 98 65;
   --ember-rgb: 198 61 30;
   --steel-rgb: 107 115 119;
 
   /* Model-derived accent (lib/theme.ts overwrites these on mount) */
-  --accent: #e0702a;
+  --accent: #E0702A;
   --accent-rgb: 224 112 42;
-  --accent-soft: #ef9a63;
-  --accent-soft-rgb: 239 154 99;
-  --accent-strong: #ad5015;
-  --accent-strong-rgb: 173 80 21;
+  --accent-soft: #f09a5c;
+  --accent-soft-rgb: 240 154 92;
+  --accent-strong: #d4651f;
+  --accent-strong-rgb: 212 101 31;
 
-  /* Frosted glass (design rework — glassmorphism) */
-  --glass-bg: rgb(255 255 255 / 0.55);
-  --glass-bg-strong: rgb(255 255 255 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.65);
-  --glass-highlight: rgb(255 255 255 / 0.9);
+  /* Claymorphism surface tokens — matches reference */
+  --clay-card-bg: #F9F7F7;
+  --clay-card-border: rgba(255, 255, 255, 0.6);
+  --clay-btn-bg: #FFFFFF;
+  --clay-inset-bg: #F1EAE0;
 
-  /* Tallow-family timer hues (design open item 3) — AA on light surfaces */
+  /* Tallow-family timer hues — AA on light surfaces */
   --timer-1: #c8821a;
   --timer-2: #b26b12;
   --timer-3: #9a5a14;
@@ -85,36 +86,47 @@
   --timer-3-rgb: 154 90 20;
   --timer-4-rgb: 131 75 22;
   --timer-5-rgb: 110 61 24;
+
+  /* Header pill */
+  --header-bg: #F9F7F7;
+  --header-border: rgba(0, 0, 0, 0.06);
+  --header-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-/* Dark — "night kitchen" (default emotional reference) */
+/* Dark — "night kitchen" — matches reference screenshot */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141110;
-    --surface: #1e1a17;
-    --surface-2: #272220;
-    --text: #f5efe6;
-    --text-muted: #a79e93;
-    --tallow: #f2b24c;
-    --verdigris: #6fa98b;
+    --bg: #0E2317;
+    --surface: #163826;
+    --surface-2: #1a4530;
+    --text: #F5EEDB;
+    --text-muted: #8fa89a;
+    --tallow: #FFB84D;
+    --verdigris: #046241;
     --ember: #e4572e;
     --steel: #9ba8b0;
 
-    --bg-rgb: 20 17 16;
-    --surface-rgb: 30 26 23;
-    --surface-2-rgb: 39 34 32;
-    --ink-rgb: 245 239 230;
-    --ink-muted-rgb: 167 158 147;
-    --tallow-rgb: 242 178 76;
-    --verdigris-rgb: 111 169 139;
+    --bg-rgb: 14 35 23;
+    --surface-rgb: 22 56 38;
+    --surface-2-rgb: 26 69 48;
+    --ink-rgb: 245 238 219;
+    --ink-muted-rgb: 143 168 154;
+    --tallow-rgb: 255 184 77;
+    --verdigris-rgb: 4 98 65;
     --ember-rgb: 228 87 46;
     --steel-rgb: 155 168 176;
 
-    /* Frosted glass */
-    --glass-bg: rgb(30 26 23 / 0.55);
-    --glass-bg-strong: rgb(30 26 23 / 0.82);
-    --glass-border: rgb(255 255 255 / 0.12);
-    --glass-highlight: rgb(255 255 255 / 0.16);
+    --clay-card-bg: #163826;
+    --clay-card-border: rgba(255, 255, 255, 0.05);
+    --clay-btn-bg: #1a4530;
+    --clay-inset-bg: #0E2317;
+
+    --accent: #E0702A;
+    --accent-rgb: 224 112 42;
+    --accent-soft: #f09a5c;
+    --accent-soft-rgb: 240 154 92;
+    --accent-strong: #d4651f;
+    --accent-strong-rgb: 212 101 31;
 
     --timer-1: #f2b24c;
     --timer-2: #e8a23a;
@@ -126,35 +138,46 @@
     --timer-3-rgb: 217 140 43;
     --timer-4-rgb: 201 118 31;
     --timer-5-rgb: 184 95 22;
+
+    /* Header pill */
+    --header-bg: #163826;
+    --header-border: rgba(255, 255, 255, 0.06);
+    --header-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #141110;
-  --surface: #1e1a17;
-  --surface-2: #272220;
-  --text: #f5efe6;
-  --text-muted: #a79e93;
-  --tallow: #f2b24c;
-  --verdigris: #6fa98b;
+  --bg: #0E2317;
+  --surface: #163826;
+  --surface-2: #1a4530;
+  --text: #F5EEDB;
+  --text-muted: #8fa89a;
+  --tallow: #FFB84D;
+  --verdigris: #046241;
   --ember: #e4572e;
   --steel: #9ba8b0;
 
-  --bg-rgb: 20 17 16;
-  --surface-rgb: 30 26 23;
-  --surface-2-rgb: 39 34 32;
-  --ink-rgb: 245 239 230;
-  --ink-muted-rgb: 167 158 147;
-  --tallow-rgb: 242 178 76;
-  --verdigris-rgb: 111 169 139;
+  --bg-rgb: 14 35 23;
+  --surface-rgb: 22 56 38;
+  --surface-2-rgb: 26 69 48;
+  --ink-rgb: 245 238 219;
+  --ink-muted-rgb: 143 168 154;
+  --tallow-rgb: 255 184 77;
+  --verdigris-rgb: 4 98 65;
   --ember-rgb: 228 87 46;
   --steel-rgb: 155 168 176;
 
-  /* Frosted glass */
-  --glass-bg: rgb(30 26 23 / 0.55);
-  --glass-bg-strong: rgb(30 26 23 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.12);
-  --glass-highlight: rgb(255 255 255 / 0.16);
+  --clay-card-bg: #163826;
+  --clay-card-border: rgba(255, 255, 255, 0.05);
+  --clay-btn-bg: #1a4530;
+  --clay-inset-bg: #0E2317;
+
+  --accent: #E0702A;
+  --accent-rgb: 224 112 42;
+  --accent-soft: #f09a5c;
+  --accent-soft-rgb: 240 154 92;
+  --accent-strong: #d4651f;
+  --accent-strong-rgb: 212 101 31;
 
   --timer-1: #f2b24c;
   --timer-2: #e8a23a;
@@ -166,6 +189,55 @@
   --timer-3-rgb: 217 140 43;
   --timer-4-rgb: 201 118 31;
   --timer-5-rgb: 184 95 22;
+
+  /* Header pill */
+  --header-bg: #163826;
+  --header-border: rgba(255, 255, 255, 0.06);
+  --header-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+:root {
+  --bg: #F7F5EA;
+  --surface: #FFFFFF;
+  --surface-2: #F2F0E5;
+  --text: #16382D;
+  --text-muted: #68776E;
+  --verdigris: #087A59;
+  --bg-rgb: 247 245 234;
+  --surface-rgb: 255 255 255;
+  --surface-2-rgb: 242 240 229;
+  --ink-rgb: 22 56 45;
+  --ink-muted-rgb: 104 119 110;
+  --verdigris-rgb: 8 122 89;
+  --clay-card-bg: #FFFFFF;
+  --clay-card-border: rgba(22, 56, 45, 0.08);
+  --clay-btn-bg: #FFFFFF;
+  --clay-inset-bg: #F2F0E5;
+  --header-bg: rgba(255, 255, 255, 0.76);
+  --header-border: rgba(22, 56, 45, 0.08);
+  --header-shadow: 0 4px 18px rgba(22, 56, 45, 0.06);
+}
+
+:root[data-theme="dark"] {
+  --bg: #071C15;
+  --surface: #0C2A20;
+  --surface-2: #103426;
+  --text: #F4F5E9;
+  --text-muted: #A7B9A8;
+  --verdigris: #0A9568;
+  --bg-rgb: 7 28 21;
+  --surface-rgb: 12 42 32;
+  --surface-2-rgb: 16 52 38;
+  --ink-rgb: 244 245 233;
+  --ink-muted-rgb: 167 185 168;
+  --verdigris-rgb: 10 149 104;
+  --clay-card-bg: #0C2A20;
+  --clay-card-border: rgba(255, 255, 255, 0.07);
+  --clay-btn-bg: #103426;
+  --clay-inset-bg: #071C15;
+  --header-bg: rgba(12, 42, 32, 0.88);
+  --header-border: rgba(255, 255, 255, 0.07);
+  --header-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
 }
 
 /* ------------------------------------------------------------------ */
@@ -201,34 +273,614 @@ body {
   outline-offset: 2px;
 }
 
+.voice-wave {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  gap: 2px;
+}
+.assistant-progress-ring {
+  width: min(440px, calc(100cqw - 24px));
+  height: min(440px, calc(100cqw - 24px));
+}
+@media (max-width: 639px) {
+  .assistant-progress-ring {
+    width: min(260px, calc(100cqw - 60px));
+    height: min(260px, calc(100cqw - 60px));
+  }
+}
+.gourmate-stage {
+  container-type: inline-size;
+}
+.gourmate-panel-stack {
+  display: grid;
+  grid-template-columns: minmax(220px, var(--chat-width)) minmax(220px, var(--planner-width));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
+}
+.gourmate-panel-stack > #chat-panel,
+.gourmate-panel-stack > #info-panel {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  order: 0;
+}
+.layout-range {
+  accent-color: rgb(var(--verdigris-rgb));
+}
+.voice-wave span {
+  width: 2px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--verdigris);
+  animation: voice-wave 820ms ease-in-out infinite alternate;
+}
+.voice-wave span:nth-child(2),
+.voice-wave span:nth-child(4) {
+  height: 10px;
+}
+.voice-wave span:nth-child(3) {
+  height: 15px;
+}
+.voice-wave.is-muted span {
+  animation-play-state: paused;
+  opacity: 0.4;
+}
+.planner-panel {
+  color: rgb(var(--ink-rgb));
+}
+.planner-panel .text-ink {
+  color: rgb(var(--ink-rgb));
+}
+.planner-panel .text-ink-muted {
+  color: rgb(var(--ink-muted-rgb));
+}
+.planner-panel .text-verdigris {
+  color: rgb(var(--verdigris-rgb));
+}
+.gourmate-quick-button {
+  min-height: 34px;
+  padding-inline: 12px;
+  font-size: 11px;
+}
+@media (max-width: 1023px) {
+  .gourmate-quick-button {
+    min-height: 44px;
+    padding-inline: 16px;
+    font-size: 14px;
+  }
+}
+@keyframes voice-wave {
+  from { transform: scaleY(0.45); }
+  to { transform: scaleY(1); }
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------------ */
-/* Frosted glass surfaces (glassmorphism rework)                       */
+/* Claymorphism surface system                                         */
 /* ------------------------------------------------------------------ */
 
+/* Extruded Cards & Panels — matches reference screenshot */
+.clay-card {
+  background: var(--clay-card-bg);
+  border-radius: var(--radius-clay);
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.07),
+    -8px -8px 22px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--clay-card-border);
+}
+:root[data-theme="dark"] .clay-card {
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.5),
+    -6px -6px 20px rgba(255, 255, 255, 0.03),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.05),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Raised Interactive Buttons & Chips — matches reference screenshot */
+.clay-btn {
+  border-radius: var(--radius-full);
+  background: var(--clay-btn-bg);
+  box-shadow:
+    5px 5px 14px rgba(0, 0, 0, 0.08),
+    -4px -4px 10px rgba(255, 255, 255, 0.9),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.85);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.clay-btn:hover {
+  transform: translateY(-1px);
+}
+.clay-btn:active {
+  transform: translateY(1px);
+  box-shadow:
+    2px 2px 6px rgba(0, 0, 0, 0.08),
+    -2px -2px 6px rgba(255, 255, 255, 0.9),
+    inset 1px 1px 2px rgba(0, 0, 0, 0.08);
+}
+:root[data-theme="dark"] .clay-btn {
+  box-shadow:
+    5px 5px 14px rgba(0, 0, 0, 0.4),
+    -4px -4px 10px rgba(255, 255, 255, 0.03),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.08);
+}
+
+/* Debossed / Inset Fields — matches reference screenshot */
+.clay-inset {
+  background: var(--clay-inset-bg);
+  border-radius: var(--radius-full);
+  border: none;
+  box-shadow:
+    inset 4px 4px 8px rgba(0, 0, 0, 0.07),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.85);
+}
+:root[data-theme="dark"] .clay-inset {
+  box-shadow:
+    inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.03);
+}
+
+/* Legacy glass compat — map to clay */
 .glass {
-  background-color: var(--glass-bg);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 0 var(--glass-highlight);
+  background: var(--clay-card-bg);
+  border-radius: var(--radius-clay);
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.07),
+    -8px -8px 22px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--clay-card-border);
+}
+:root[data-theme="dark"] .glass {
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.5),
+    -6px -6px 20px rgba(255, 255, 255, 0.03),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.05),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .glass-strong {
-  background-color: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 0 var(--glass-highlight);
+  background: var(--clay-card-bg);
+  border-radius: var(--radius-clay);
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.07),
+    -8px -8px 22px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--clay-card-border);
+}
+:root[data-theme="dark"] .glass-strong {
+  box-shadow:
+    12px 12px 28px rgba(0, 0, 0, 0.5),
+    -6px -6px 20px rgba(255, 255, 255, 0.03),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.05),
+    inset -2px -2px 5px rgba(0, 0, 0, 0.2);
 }
 
 /* ------------------------------------------------------------------ */
-/* Themed scrollbars — thin + rounded, glass-blended (chat thread,      */
-/* info body, settings body). Firefox gets scrollbar-width/color;      */
-/* WebKit/Blink the ::-webkit-scrollbar pair.                          */
+/* Top accent hairline border                                          */
+/* ------------------------------------------------------------------ */
+
+.top-accent-border {
+  height: 1px;
+  border-bottom: 1px solid transparent;
+  background: linear-gradient(
+    90deg,
+    rgba(224, 112, 42, 0.05) 0%,
+    rgba(224, 112, 42, 0.45) 50%,
+    rgba(224, 112, 42, 0.05) 100%
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Header pill — matches reference screenshot                          */
+/* ------------------------------------------------------------------ */
+
+.header-pill {
+  background: var(--header-bg);
+  border: 1px solid var(--header-border);
+  box-shadow: var(--header-shadow);
+  border-radius: var(--radius-full);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+}
+
+.header-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #FFB84D 0%, #E0702A 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(224, 112, 42, 0.3);
+}
+
+.header-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.header-icon-btn:hover {
+  background: rgba(127, 127, 127, 0.1);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* AI LIVE pill — matches reference screenshot                         */
+/* ------------------------------------------------------------------ */
+
+.ai-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(4, 98, 65, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #046241;
+}
+:root[data-theme="dark"] .ai-live-pill {
+  background: rgba(4, 98, 65, 0.25);
+  color: #4ade80;
+}
+.ai-live-pill .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #046241;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+:root[data-theme="dark"] .ai-live-pill .status-dot {
+  background: #4ade80;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Assistant Active pill — matches reference screenshot                */
+/* ------------------------------------------------------------------ */
+
+.assistant-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--clay-card-border);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.assistant-active-pill .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #FFB84D;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Navigation arrow buttons — matches reference screenshot             */
+/* ------------------------------------------------------------------ */
+
+.nav-arrow-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--clay-card-border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+.nav-arrow-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  transform: scale(1.05);
+}
+
+/* ------------------------------------------------------------------ */
+/* Step progress dots — matches reference screenshot                   */
+/* ------------------------------------------------------------------ */
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--steel);
+  opacity: 0.35;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.step-dot.active {
+  background: #FFB84D;
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(255, 184, 77, 0.3);
+}
+.step-dot.done {
+  background: #046241;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------ */
+/* Chef's note — matches reference screenshot                          */
+/* ------------------------------------------------------------------ */
+
+.chefs-note {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.chefs-note-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #FFB84D;
+  margin-bottom: 4px;
+}
+.chefs-note-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ------------------------------------------------------------------ */
+/* Voice control pill — matches reference screenshot                   */
+/* ------------------------------------------------------------------ */
+
+.voice-control-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--clay-card-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.voice-control-pill .listening-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.voice-control-pill .waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+.voice-control-pill .waveform .bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.6;
+  animation: waveform 1.2s ease-in-out infinite;
+}
+.voice-control-pill .waveform .bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+.voice-control-pill .waveform .bar:nth-child(2) { height: 14px; animation-delay: 0.15s; }
+.voice-control-pill .waveform .bar:nth-child(3) { height: 18px; animation-delay: 0.3s; }
+.voice-control-pill .waveform .bar:nth-child(4) { height: 12px; animation-delay: 0.45s; }
+.voice-control-pill .waveform .bar:nth-child(5) { height: 16px; animation-delay: 0.6s; }
+.voice-control-pill .waveform .bar:nth-child(6) { height: 10px; animation-delay: 0.75s; }
+.voice-control-pill .waveform .bar:nth-child(7) { height: 14px; animation-delay: 0.9s; }
+@keyframes waveform {
+  0%, 100% { transform: scaleY(0.6); }
+  50% { transform: scaleY(1); }
+}
+.voice-control-pill .mic-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #046241;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(4, 98, 65, 0.3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Planner footer — matches reference screenshot                       */
+/* ------------------------------------------------------------------ */
+
+.planner-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--clay-card-border);
+  margin-top: auto;
+}
+.planner-footer .footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.planner-footer .footer-right {
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.planner-footer .footer-right:hover {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ingredients collapsible — matches reference screenshot              */
+/* ------------------------------------------------------------------ */
+
+.ingredients-collapsible {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--radius-full);
+  background: rgba(4, 98, 65, 0.06);
+  border: 1px solid rgba(4, 98, 65, 0.1);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ingredients-collapsible:hover {
+  background: rgba(4, 98, 65, 0.1);
+}
+.ingredients-collapsible .ingredients-label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Done cooking button — matches reference screenshot                  */
+/* ------------------------------------------------------------------ */
+
+.done-cooking-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #FFB84D 0%, #E0702A 100%);
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 12px rgba(224, 112, 42, 0.3);
+  flex: 1;
+}
+.done-cooking-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(224, 112, 42, 0.4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Stop cooking button — matches reference screenshot                  */
+/* ------------------------------------------------------------------ */
+
+.stop-cooking-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--clay-card-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex: 1;
+}
+.stop-cooking-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Metadata pill — matches reference screenshot                        */
+/* ------------------------------------------------------------------ */
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ------------------------------------------------------------------ */
+/* Step badge — matches reference screenshot                           */
+/* ------------------------------------------------------------------ */
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ------------------------------------------------------------------ */
+/* Timer display — matches reference screenshot                        */
+/* ------------------------------------------------------------------ */
+
+.timer-display {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Progress percentage — matches reference screenshot                  */
+/* ------------------------------------------------------------------ */
+
+.progress-percentage {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Themed scrollbars — thin + rounded, clay-blended                    */
 /* ------------------------------------------------------------------ */
 
 * {
@@ -257,7 +909,6 @@ body {
   background-clip: padding-box;
 }
 
-/* Cards hide the bar entirely; wheel/touch scrolling keeps working. */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -267,75 +918,28 @@ body {
   display: none;
 }
 
-/* Accent gradient orbs drifting behind the glass (GlassBackdrop). */
-.glass-orb {
-  position: absolute;
-  border-radius: var(--radius-full);
-  filter: blur(72px);
-  will-change: transform;
-}
+/* ------------------------------------------------------------------ */
+/* Timer pulse → verdigris (design §5.3)                               */
+/* ------------------------------------------------------------------ */
 
-.glass-orb-1 {
-  width: 46vw;
-  height: 46vw;
-  min-width: 320px;
-  min-height: 320px;
-  top: -12%;
-  left: -8%;
-  background: radial-gradient(circle at 50% 50%, rgb(var(--accent-rgb) / 0.24), transparent 68%);
-  animation: orb-drift-1 52s var(--ease-ui) infinite alternate;
-}
-
-.glass-orb-2 {
-  width: 38vw;
-  height: 38vw;
-  min-width: 280px;
-  min-height: 280px;
-  top: 28%;
-  right: -10%;
-  background: radial-gradient(circle at 50% 50%, rgb(var(--accent-soft-rgb) / 0.2), transparent 68%);
-  animation: orb-drift-2 64s var(--ease-ui) infinite alternate;
-}
-
-.glass-orb-3 {
-  width: 42vw;
-  height: 42vw;
-  min-width: 300px;
-  min-height: 300px;
-  bottom: -14%;
-  left: 22%;
-  background: radial-gradient(circle at 50% 50%, rgb(var(--accent-strong-rgb) / 0.16), transparent 68%);
-  animation: orb-drift-3 76s var(--ease-ui) infinite alternate;
-}
-
-@keyframes orb-drift-1 {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
+@keyframes timer-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--verdigris) 0%, transparent);
   }
-  to {
-    transform: translate3d(6vw, 5vh, 0) scale(1.12);
+  50% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--verdigris) 28%, transparent);
   }
 }
 
-@keyframes orb-drift-2 {
-  from {
-    transform: translate3d(0, 0, 0) scale(1.06);
-  }
-  to {
-    transform: translate3d(-5vw, -6vh, 0) scale(1);
-  }
+.timer-pulse {
+  animation: timer-pulse 1.4s var(--ease-ui) infinite;
 }
 
-@keyframes orb-drift-3 {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(-7vw, -4vh, 0) scale(1.1);
-  }
-}
+/* ------------------------------------------------------------------ */
+/* Confetti burst (Confetti.tsx)                                       */
+/* ------------------------------------------------------------------ */
 
-/* Completion confetti burst (Confetti.tsx) — short, non-looping, fades out. */
 .confetti-piece {
   position: absolute;
   top: 36%;
@@ -363,24 +967,8 @@ body {
   }
 }
 
-/* Timer completion pulse → verdigris (design §5.3) */
-@keyframes timer-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--verdigris) 0%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 10px color-mix(in srgb, var(--verdigris) 28%, transparent);
-  }
-}
-
-.timer-pulse {
-  animation: timer-pulse 1.4s var(--ease-ui) infinite;
-}
-
 /* ------------------------------------------------------------------ */
 /* Reduced motion — pause ambient loops, keep discrete transitions      */
-/* (design §4 recommendation)                                          */
 /* ------------------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
@@ -389,12 +977,6 @@ body {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--verdigris) 45%, transparent);
   }
 
-  /* Ambient orb drift is motion, not feedback — stay static when reduced. */
-  .glass-orb {
-    animation: none;
-  }
-
-  /* Celebration confetti is pure motion — skip it entirely when reduced. */
   .confetti-piece {
     animation: none;
     display: none;

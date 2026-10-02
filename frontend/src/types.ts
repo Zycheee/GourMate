@@ -192,6 +192,7 @@ export type ConnectionStatus =
   | "closed";
 
 export type ThemePreference = "auto" | "light" | "dark";
+export type PanelSide = "left" | "right";
 
 export interface Settings {
   /** Preferred edge-tts voice id (see design §5.4 "Voice pick"). */
@@ -199,6 +200,11 @@ export interface Settings {
   micDeviceId: string | null;
   timerSound: boolean;
   theme: ThemePreference;
+  chatWidth: number;
+  plannerWidth: number;
+  chatSide: PanelSide;
+  plannerSide: PanelSide;
+  sameSideOrder: "chat-first" | "planner-first";
 }
 
 export type ToastKind = "error" | "rate_limit" | "info";

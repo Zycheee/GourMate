@@ -30,9 +30,13 @@ export default {
         mono: ['"Geist Mono"', "ui-monospace", "monospace"]
       },
       fontSize: {
+        "9": ["9px", { lineHeight: "12px" }],
+        "10": ["10px", { lineHeight: "14px" }],
+        "11": ["11px", { lineHeight: "16px" }],
         "12": ["12px", { lineHeight: "16px" }],
         "14": ["14px", { lineHeight: "20px" }],
         "16": ["16px", { lineHeight: "24px" }],
+        "18": ["18px", { lineHeight: "27px" }],
         "20": ["20px", { lineHeight: "28px" }],
         "28": ["28px", { lineHeight: "34px" }],
         "40": ["40px", { lineHeight: "44px" }],

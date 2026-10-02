@@ -5,7 +5,7 @@
  * not leak into persistence, and timers recompute from `ends_at` on resume.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { useSession, SYNC_TURN_WINDOW } from "../session";
+import { DEFAULT_PANEL_LAYOUT, useSession, SYNC_TURN_WINDOW } from "../session";
 import { makeRecipe, makeTimer } from "../../test/fixtures";
 
 const PERSIST_KEY = "gourmate-session-v1";
@@ -168,6 +168,29 @@ describe("sessionSnapshot", () => {
 });
 
 describe("persistence (localStorage)", () => {
+  it("persists same-side panel order and reset restores the default layout", async () => {
+    useSession.getState().setSettings({
+      chatSide: "right",
+      plannerSide: "right",
+      sameSideOrder: "planner-first"
+    });
+
+    await persistApi.rehydrate();
+
+    expect(useSession.getState().settings).toMatchObject({
+      chatSide: "right",
+      plannerSide: "right",
+      sameSideOrder: "planner-first"
+    });
+
+    useSession.getState().setSettings(DEFAULT_PANEL_LAYOUT);
+    expect(useSession.getState().settings).toMatchObject({
+      chatSide: "left",
+      plannerSide: "right",
+      sameSideOrder: "chat-first"
+    });
+  });
+
   it("hydrates persisted fields and keeps ephemeral fields transient", async () => {
     const recipe = makeRecipe();
     const timer = makeTimer();

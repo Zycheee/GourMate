@@ -48,7 +48,7 @@ export const UI = {
   copied: "Copied.",
   transcript: "Transcript",
   chatTitle: "Chat",
-  composerPlaceholder: "type a message or paste a recipe…",
+  composerPlaceholder: "type a message or paste a recipe...",
   send: "Send",
   showChat: "Show chat",
   hideChat: "Hide chat",
@@ -165,7 +165,7 @@ export const UI = {
     doneCookingText: "I'm done cooking",
     /* Recipe time estimates (never fabricated — hidden when unknown). */
     eta: (minutes: number) => `About ${minutes} min total`,
-    totalEta: (minutes: number) => `${minutes} min total`
+    totalEta: (minutes: number) => `${minutes} min total recipe`
   },
   speechTest: {
     toggle: "Test speech",
